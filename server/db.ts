@@ -882,6 +882,7 @@ const existingSystemsForClientId = db.prepare('SELECT id, slug, client_id FROM s
   client_id: string;
 }>;
 for (const sys of existingSystemsForClientId) {
+  if (/^(cid|cli)_/.test(sys.client_id)) continue;
   const expectedClientId = `cid_${sys.slug.trim().replace(/-/g, '_').replace(/[^a-z0-9_]/gi, '_')}`;
   if (sys.client_id !== expectedClientId) {
     const conflict = db

@@ -19,6 +19,7 @@ import type { AuditLog, DiagnosticHeaders, IamSystem } from '../types/iam';
 
 export interface AuditLogsProps {
   token: string;
+  canReadUsers?: boolean;
   onNotify: (msg: string, variant?: 'success' | 'error' | 'warning') => void;
   refreshSignal?: number;
   onLogsUpdated?: (logs: AuditLog[]) => void;
@@ -106,6 +107,7 @@ function readPersistedFilters(): Partial<PersistedAuditFilters> {
 
 export const AuditLogs: React.FC<AuditLogsProps> = ({
   token,
+  canReadUsers = false,
   onNotify,
   refreshSignal = 0,
   onLogsUpdated,
@@ -153,6 +155,10 @@ export const AuditLogs: React.FC<AuditLogsProps> = ({
   }, [searchTerm, systemFilter, statusFilter, actionFilter, resourceFilter, timeWindow, recordLimit]);
 
   useEffect(() => {
+    if (!canReadUsers) {
+      setActorDirectory({});
+      return;
+    }
     let active = true;
     gqlRequest<{ users: Array<{ id: string; displayName: string; email: string }> }>({
       token,
@@ -181,7 +187,7 @@ export const AuditLogs: React.FC<AuditLogsProps> = ({
     return () => {
       active = false;
     };
-  }, [token]);
+  }, [token, canReadUsers]);
 
   const loadAuditTrail = useCallback(
     async (bypassCache = false) => {

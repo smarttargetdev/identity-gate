@@ -30,6 +30,11 @@ export interface PlatformSettings {
   requireExplicitConsent: boolean;
   allowDataPortabilityExport: boolean;
   allowSelfErasure: boolean;
+  systemIdPrefix: string;
+  clientIdPrefix: string;
+  normalizeIdentifiers: boolean;
+  systemIdSeparator: '_' | '-';
+  clientIdSeparator: '_' | '-';
   updatedAt: string;
   updatedBy: string;
 }
@@ -62,6 +67,11 @@ const DEFAULT_SETTINGS: PlatformSettings = {
   requireExplicitConsent: true,
   allowDataPortabilityExport: true,
   allowSelfErasure: true,
+  systemIdPrefix: 'sys',
+  clientIdPrefix: 'cli',
+  normalizeIdentifiers: true,
+  systemIdSeparator: '_',
+  clientIdSeparator: '_',
   updatedAt: new Date().toISOString(),
   updatedBy: 'system',
 };
@@ -112,6 +122,19 @@ function normalizeSettings(raw: Partial<PlatformSettings>, updatedBy = 'system')
     requireExplicitConsent: Boolean(raw.requireExplicitConsent ?? DEFAULT_SETTINGS.requireExplicitConsent),
     allowDataPortabilityExport: Boolean(raw.allowDataPortabilityExport ?? DEFAULT_SETTINGS.allowDataPortabilityExport),
     allowSelfErasure: Boolean(raw.allowSelfErasure ?? DEFAULT_SETTINGS.allowSelfErasure),
+    systemIdPrefix:
+      String(raw.systemIdPrefix ?? DEFAULT_SETTINGS.systemIdPrefix)
+        .trim()
+        .replace(/[^a-zA-Z0-9_-]/g, '') || DEFAULT_SETTINGS.systemIdPrefix,
+    clientIdPrefix:
+      String(raw.clientIdPrefix ?? DEFAULT_SETTINGS.clientIdPrefix)
+        .trim()
+        .replace(/[^a-zA-Z0-9_-]/g, '') || DEFAULT_SETTINGS.clientIdPrefix,
+    normalizeIdentifiers: Boolean(raw.normalizeIdentifiers ?? DEFAULT_SETTINGS.normalizeIdentifiers),
+    systemIdSeparator:
+      (raw.systemIdSeparator ?? (raw as Record<string, unknown>).identifierSeparator) === '-' ? '-' : '_',
+    clientIdSeparator:
+      (raw.clientIdSeparator ?? (raw as Record<string, unknown>).identifierSeparator) === '-' ? '-' : '_',
     updatedAt: raw.updatedAt || new Date().toISOString(),
     updatedBy: raw.updatedBy || updatedBy,
   };
@@ -220,5 +243,30 @@ export function getPublicPlatformConfig() {
     defaultEdgeCacheTtl: s.defaultEdgeCacheTtl,
     defaultPrivacyPolicyVersion: s.defaultPrivacyPolicyVersion,
     pkceRequired: s.pkceRequired,
+    systemIdPrefix: s.systemIdPrefix,
+    clientIdPrefix: s.clientIdPrefix,
+    normalizeIdentifiers: s.normalizeIdentifiers,
+    systemIdSeparator: s.systemIdSeparator,
+    clientIdSeparator: s.clientIdSeparator,
   };
+}
+
+export function buildIdentifierValue(
+  prefix: string,
+  slug: string,
+  normalize: boolean,
+  separator: '_' | '-'
+): string {
+  const sep = separator === '-' ? '-' : '_';
+  const rawPrefix = prefix.trim();
+  const rawSlug = slug.trim();
+  const norm = (val: string) =>
+    normalize
+      ? val.replace(/[^a-zA-Z0-9]+/g, sep).replace(new RegExp(`^[${sep}]+|[${sep}]+$`, 'g'), '')
+      : val.replace(/[^a-zA-Z0-9_-]/g, '');
+  const cleanPrefix = norm(rawPrefix).replace(/[-_]+$/g, '');
+  const cleanSlug = norm(rawSlug).replace(/^[-_]+/g, '');
+  if (!cleanPrefix) return cleanSlug;
+  if (!cleanSlug) return cleanPrefix;
+  return `${cleanPrefix}${sep}${cleanSlug}`;
 }

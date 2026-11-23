@@ -4,6 +4,7 @@ import {
   Bug,
   Database,
   KeyRound,
+  Layers,
   Lock,
   RotateCcw,
   Save,
@@ -59,6 +60,11 @@ const SYSTEM_SETTINGS_QUERY = `
       requireExplicitConsent
       allowDataPortabilityExport
       allowSelfErasure
+      systemIdPrefix
+      clientIdPrefix
+      normalizeIdentifiers
+      systemIdSeparator
+      clientIdSeparator
       updatedAt
       updatedBy
       runtime {
@@ -102,6 +108,11 @@ const UPDATE_SETTINGS_MUTATION = `
       requireExplicitConsent
       allowDataPortabilityExport
       allowSelfErasure
+      systemIdPrefix
+      clientIdPrefix
+      normalizeIdentifiers
+      systemIdSeparator
+      clientIdSeparator
       updatedAt
       updatedBy
       runtime {
@@ -145,6 +156,11 @@ const RESET_SETTINGS_MUTATION = `
       requireExplicitConsent
       allowDataPortabilityExport
       allowSelfErasure
+      systemIdPrefix
+      clientIdPrefix
+      normalizeIdentifiers
+      systemIdSeparator
+      clientIdSeparator
       updatedAt
       updatedBy
       runtime {
@@ -260,6 +276,11 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
       'requireExplicitConsent',
       'allowDataPortabilityExport',
       'allowSelfErasure',
+      'systemIdPrefix',
+      'clientIdPrefix',
+      'normalizeIdentifiers',
+      'systemIdSeparator',
+      'clientIdSeparator',
     ];
     return keys.some((k) => saved[k] !== draft[k]);
   }, [saved, draft]);
@@ -316,6 +337,11 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             requireExplicitConsent: draft.requireExplicitConsent,
             allowDataPortabilityExport: draft.allowDataPortabilityExport,
             allowSelfErasure: draft.allowSelfErasure,
+            systemIdPrefix: draft.systemIdPrefix,
+            clientIdPrefix: draft.clientIdPrefix,
+            normalizeIdentifiers: draft.normalizeIdentifiers,
+            systemIdSeparator: draft.systemIdSeparator,
+            clientIdSeparator: draft.clientIdSeparator,
           },
         },
       });
@@ -556,6 +582,137 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     placeholder="Auto-detectar via Host / Proxy"
                     className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
                   />
+                </div>
+              </div>
+            </section>
+          )}
+
+          {/* 1b. Prefixos e Normalização de Identificadores de Sistemas */}
+          {activeTab === 'environment' && (
+            <section className="bg-[#111827] border border-slate-800/90 rounded-lg p-6 space-y-5">
+              <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                <Layers className="w-4 h-4 text-[#F6821F]" />
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-white">Prefixos e Normalização de Sistemas</h2>
+                  <InfoTooltip text="Define os prefixos padrão para o ID do sistema e do cliente, se os valores devem ser normalizados e o caracter separador (- ou _)." />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="bg-[#090D16]/60 border border-slate-800/80 rounded-md p-4 space-y-3">
+                  <div className="text-xs font-semibold text-white">ID do Sistema</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                        Prefixo do ID do Sistema
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={draft.systemIdPrefix}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            systemIdPrefix: e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''),
+                          })
+                        }
+                        placeholder="sys"
+                        className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                        Caracter de Normalização
+                      </label>
+                      <select
+                        value={draft.systemIdSeparator}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            systemIdSeparator: e.target.value === '-' ? '-' : '_',
+                          })
+                        }
+                        className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                      >
+                        <option value="_">_ (underscore)</option>
+                        <option value="-">- (hífen)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-[#090D16]/60 border border-slate-800/80 rounded-md p-4 space-y-3">
+                  <div className="text-xs font-semibold text-white">Cliente</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                        Prefixo do Cliente
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={draft.clientIdPrefix}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            clientIdPrefix: e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''),
+                          })
+                        }
+                        placeholder="cli"
+                        className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                        Caracter de Normalização
+                      </label>
+                      <select
+                        value={draft.clientIdSeparator}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            clientIdSeparator: e.target.value === '-' ? '-' : '_',
+                          })
+                        }
+                        className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                      >
+                        <option value="_">_ (underscore)</option>
+                        <option value="-">- (hífen)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-slate-800/80">
+                <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={draft.normalizeIdentifiers}
+                    onChange={(e) => setDraft({ ...draft, normalizeIdentifiers: e.target.checked })}
+                    className="rounded border-slate-700 bg-[#090D16]"
+                  />
+                  <span>
+                    Normalizar valores (substituir caracteres inválidos e separadores pelo caracter de cada campo)
+                  </span>
+                </label>
+                <div className="text-[11px] font-mono text-slate-400">
+                  Exemplo:{' '}
+                  <span className="text-slate-200">
+                    {(draft.systemIdPrefix || 'sys').replace(/[-_]+$/g, '')}
+                    {draft.systemIdSeparator}
+                    {draft.normalizeIdentifiers
+                      ? `portal${draft.systemIdSeparator}parceiros`
+                      : 'portal-parceiros'}
+                  </span>{' '}
+                  ·{' '}
+                  <span className="text-slate-200">
+                    {(draft.clientIdPrefix || 'cli').replace(/[-_]+$/g, '')}
+                    {draft.clientIdSeparator}
+                    {draft.normalizeIdentifiers
+                      ? `portal${draft.clientIdSeparator}parceiros`
+                      : 'portal-parceiros'}
+                  </span>
                 </div>
               </div>
             </section>

@@ -27,6 +27,7 @@ import {
   Zap,
   History,
   KeyRound,
+  Layers,
 } from 'lucide-react';
 import { AuthGate } from './components/AuthGate';
 import { OverviewTelemetry, type OverviewSection } from './components/OverviewTelemetry';
@@ -48,6 +49,7 @@ import type { AuthSessionState, DiagnosticHeaders, PublicPlatformConfig } from '
 
 type NavTab =
   | OverviewSection
+  | 'assets'
   | 'systems'
   | 'users'
   | 'rbac'
@@ -76,12 +78,11 @@ const NAV_ITEMS: Array<{
   icon: React.ComponentType<{ className?: string }>;
   shortcut: string;
   adminOnly?: boolean;
+  requiredPermission?: string;
 }> = [
   { id: 'overview', label: 'Visão Geral', group: 'admin', icon: Activity, shortcut: 'o' },
-  { id: 'systems', label: 'Sistemas', group: 'admin', icon: AppWindow, shortcut: 's' },
-  { id: 'users', label: 'Usuários', group: 'admin', icon: Users, shortcut: 'u' },
-  { id: 'rbac', label: 'Permissões', group: 'admin', icon: Shield, shortcut: 'r' },
-  { id: 'audit-logs', label: 'Auditoria', group: 'admin', icon: ScrollText, shortcut: 'a' },
+  { id: 'assets', label: 'Ativos', group: 'admin', icon: Layers, shortcut: 'v' },
+  { id: 'audit-logs', label: 'Auditoria', group: 'admin', icon: ScrollText, shortcut: 'a', requiredPermission: 'iam:audit:read' },
   { id: 'settings', label: 'Configurações', group: 'admin', icon: Settings, shortcut: 'c', adminOnly: true },
   { id: 'idps', label: 'Provedores', group: 'infra', icon: Globe, shortcut: 'i' },
   { id: 'graphql', label: 'Infraestrutura', group: 'infra', icon: Code2, shortcut: 'f' },
@@ -90,18 +91,33 @@ const NAV_ITEMS: Array<{
   { id: 'profile', label: 'Perfil', group: 'self', icon: UserCircle2, shortcut: 'p' },
 ];
 
+type AssetSubTab = 'systems' | 'users' | 'rbac';
+
+const ASSETS_SUBMENUS: Array<{
+  id: AssetSubTab;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  shortcut: string;
+  requiredPermission?: string;
+}> = [
+  { id: 'systems', label: 'Sistemas', icon: AppWindow, shortcut: 's' },
+  { id: 'users', label: 'Usuários', icon: Users, shortcut: 'u', requiredPermission: 'iam:users:read' },
+  { id: 'rbac', label: 'Permissões', icon: Shield, shortcut: 'r' },
+];
+
 const OVERVIEW_SUBMENUS: Array<{
   id: OverviewSection;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  requiredPermission?: string;
 }> = [
   { id: 'overview-stats', label: 'Estatísticas', icon: Users },
   { id: 'overview-trend', label: 'Usuários Ativos', icon: TrendingUp },
   { id: 'overview-http', label: 'Respostas do Servidor', icon: ServerCrash },
   { id: 'overview-edge', label: 'Métricas de Borda', icon: Zap },
   { id: 'overview-health', label: 'Histórico de Saúde', icon: History },
-  { id: 'overview-alerts', label: 'Alertas Recentes', icon: AlertOctagon },
-  { id: 'overview-audit', label: 'Logs de Auditoria', icon: ScrollText },
+  { id: 'overview-alerts', label: 'Alertas Recentes', icon: AlertOctagon, requiredPermission: 'iam:audit:read' },
+  { id: 'overview-audit', label: 'Logs de Auditoria', icon: ScrollText, requiredPermission: 'iam:audit:read' },
 ];
 
 function inferToastVariant(message: string): ToastVariant {
@@ -132,6 +148,7 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<NavTab>('overview');
   const [overviewMenuExpanded, setOverviewMenuExpanded] = useState(true);
+  const [assetsMenuExpanded, setAssetsMenuExpanded] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isExpandedView, setIsExpandedView] = useState(false);
   const [shortcutChordPending, setShortcutChordPending] = useState(false);
@@ -271,13 +288,30 @@ export default function App() {
       }
 
       if (shortcutChordPending) {
-        const matched = NAV_ITEMS.find(
-          (item) => item.shortcut === key && (!item.adminOnly || isSuperAdminUser)
+        const hasPerm = (perm?: string) =>
+          !perm || isSuperAdminUser || session.user.permissions.includes(perm);
+        const matchedNav = NAV_ITEMS.find(
+          (item) =>
+            item.shortcut === key &&
+            (!item.adminOnly || isSuperAdminUser) &&
+            hasPerm(item.requiredPermission)
+        );
+        const matchedAsset = ASSETS_SUBMENUS.find(
+          (sub) => sub.shortcut === key && hasPerm(sub.requiredPermission)
         );
         clearChord();
-        if (matched) {
+        if (matchedAsset) {
           ev.preventDefault();
-          setActiveTab(matched.id);
+          setActiveTab(matchedAsset.id);
+          setAssetsMenuExpanded(true);
+        } else if (matchedNav) {
+          ev.preventDefault();
+          if (matchedNav.id === 'assets') {
+            setActiveTab('systems');
+            setAssetsMenuExpanded(true);
+          } else {
+            setActiveTab(matchedNav.id);
+          }
         }
         return;
       }
@@ -323,7 +357,23 @@ export default function App() {
   }
 
   const isSuperAdmin = session.user.roles.includes('super_admin');
+  const hasPermission = (perm?: string) =>
+    !perm || isSuperAdmin || session.user.permissions.includes(perm);
+  const canReadUsers = hasPermission('iam:users:read');
+  const canWriteUsers = hasPermission('iam:users:write');
+  const canWriteSystems = hasPermission('iam:systems:write');
+  const canWriteRoles = hasPermission('iam:roles:write');
   const platformName = publicConfig?.platformName || 'Identity Secure Gate';
+
+  const resolvedActiveTab: NavTab = (() => {
+    if (activeTab === 'assets') return 'systems';
+    if (activeTab === 'users' && !canReadUsers) return 'systems';
+    if ((activeTab === 'audit-logs' || activeTab === 'overview-audit' || activeTab === 'overview-alerts') && !canReadAuditLogs) {
+      return 'overview';
+    }
+    if (activeTab === 'settings' && !isSuperAdmin) return 'overview';
+    return activeTab;
+  })();
 
   return (
     <div className="min-h-screen bg-[#090D16] text-slate-100 flex">
@@ -373,11 +423,19 @@ export default function App() {
                   <div className="px-2.5 pb-1.5 text-[11px] font-medium text-slate-500">Administração GraphQL</div>
                 )}
                 <div className="space-y-0.5">
-                  {NAV_ITEMS.filter((i) => i.group === 'admin' && (!i.adminOnly || isSuperAdmin)).map((item) => {
+                  {NAV_ITEMS.filter(
+                    (i) => i.group === 'admin' && (!i.adminOnly || isSuperAdmin) && hasPermission(i.requiredPermission)
+                  ).map((item) => {
                     const Icon = item.icon;
                     const isOverviewGroup = item.id === 'overview';
-                    const isOverviewChildActive = isOverviewGroup && activeTab.startsWith('overview-');
-                    const isActive = activeTab === item.id || (isSidebarCollapsed && isOverviewChildActive);
+                    const isAssetsGroup = item.id === 'assets';
+                    const isOverviewChildActive = isOverviewGroup && resolvedActiveTab.startsWith('overview-');
+                    const isAssetsChildActive =
+                      isAssetsGroup &&
+                      (resolvedActiveTab === 'systems' || resolvedActiveTab === 'users' || resolvedActiveTab === 'rbac');
+                    const isActive =
+                      resolvedActiveTab === item.id ||
+                      (isSidebarCollapsed && (isOverviewChildActive || isAssetsChildActive));
 
                     if (isOverviewGroup) {
                       return (
@@ -432,9 +490,9 @@ export default function App() {
 
                           {!isSidebarCollapsed && overviewMenuExpanded && (
                             <div className="ml-3.5 pl-2 border-l border-slate-800/90 space-y-0.5 py-0.5">
-                              {OVERVIEW_SUBMENUS.map((sub) => {
+                              {OVERVIEW_SUBMENUS.filter((sub) => hasPermission(sub.requiredPermission)).map((sub) => {
                                 const SubIcon = sub.icon;
-                                const isSubActive = activeTab === sub.id;
+                                const isSubActive = resolvedActiveTab === sub.id;
                                 return (
                                   <button
                                     key={sub.id}
@@ -452,6 +510,95 @@ export default function App() {
                                       }`}
                                     />
                                     <span className="truncate">{sub.label}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    if (isAssetsGroup) {
+                      const visibleAssetSubs = ASSETS_SUBMENUS.filter((sub) => hasPermission(sub.requiredPermission));
+                      return (
+                        <div key={item.id} className="space-y-0.5">
+                          <div className="flex items-center gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!isAssetsChildActive) {
+                                  setActiveTab(visibleAssetSubs[0]?.id ?? 'systems');
+                                }
+                                setAssetsMenuExpanded(true);
+                              }}
+                              title={`${item.label} (g ${item.shortcut})`}
+                              aria-label={item.label}
+                              className={`flex-1 flex items-center ${
+                                isSidebarCollapsed ? 'justify-center px-2 py-2' : 'justify-between gap-2 px-2.5 py-2'
+                              } rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+                                isActive
+                                  ? 'bg-[#F6821F]/15 text-white border border-[#F6821F]/40'
+                                  : isAssetsChildActive
+                                    ? 'bg-slate-800/40 text-slate-100 border border-slate-700/60'
+                                    : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/40 border border-transparent'
+                              }`}
+                            >
+                              <span className="flex items-center gap-2.5 min-w-0">
+                                <Icon
+                                  className={`w-3.5 h-3.5 shrink-0 ${
+                                    isActive || isAssetsChildActive ? 'text-[#F6821F]' : 'text-slate-400'
+                                  }`}
+                                />
+                                {!isSidebarCollapsed && <span className="truncate">{item.label}</span>}
+                              </span>
+                              {!isSidebarCollapsed && (
+                                <span className="text-[10px] font-mono text-slate-600 shrink-0">g {item.shortcut}</span>
+                              )}
+                            </button>
+                            {!isSidebarCollapsed && (
+                              <button
+                                type="button"
+                                onClick={() => setAssetsMenuExpanded((prev) => !prev)}
+                                aria-label={assetsMenuExpanded ? 'Recolher submenus de Ativos' : 'Expandir submenus de Ativos'}
+                                aria-expanded={assetsMenuExpanded}
+                                className="p-1.5 rounded-md text-slate-500 hover:text-slate-200 hover:bg-slate-800/40 transition-colors shrink-0"
+                              >
+                                {assetsMenuExpanded ? (
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                ) : (
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            )}
+                          </div>
+
+                          {!isSidebarCollapsed && assetsMenuExpanded && (
+                            <div className="ml-3.5 pl-2 border-l border-slate-800/90 space-y-0.5 py-0.5">
+                              {visibleAssetSubs.map((sub) => {
+                                const SubIcon = sub.icon;
+                                const isSubActive = resolvedActiveTab === sub.id;
+                                return (
+                                  <button
+                                    key={sub.id}
+                                    type="button"
+                                    onClick={() => setActiveTab(sub.id)}
+                                    title={`${sub.label} (g ${sub.shortcut})`}
+                                    className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap ${
+                                      isSubActive
+                                        ? 'bg-[#F6821F]/15 text-white border border-[#F6821F]/40'
+                                        : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/40 border border-transparent'
+                                    }`}
+                                  >
+                                    <span className="flex items-center gap-2 min-w-0">
+                                      <SubIcon
+                                        className={`w-3 h-3 shrink-0 ${
+                                          isSubActive ? 'text-[#F6821F]' : 'text-slate-500'
+                                        }`}
+                                      />
+                                      <span className="truncate">{sub.label}</span>
+                                    </span>
+                                    <span className="text-[10px] font-mono text-slate-600 shrink-0">g {sub.shortcut}</span>
                                   </button>
                                 );
                               })}
@@ -764,11 +911,13 @@ export default function App() {
 
         {/* Active Viewport */}
         <main className={`flex-1 p-6 max-w-[1360px] w-full ${isExpandedView ? 'mx-auto' : ''}`}>
-          {(activeTab === 'overview' || activeTab.startsWith('overview-')) && (
+          {(resolvedActiveTab === 'overview' || resolvedActiveTab.startsWith('overview-')) && (
             <OverviewTelemetry
               key={refreshTick}
               token={session.token}
-              section={activeTab as OverviewSection}
+              section={resolvedActiveTab as OverviewSection}
+              canReadUsers={canReadUsers}
+              canReadAuditLogs={canReadAuditLogs}
               onNavigateSection={(sec) => {
                 setActiveTab(sec);
                 setOverviewMenuExpanded(true);
@@ -776,21 +925,45 @@ export default function App() {
               onNotify={notify}
             />
           )}
-          {activeTab === 'systems' && (
+          {resolvedActiveTab === 'systems' && (
             <SystemsManager
               token={session.token}
+              canWriteSystems={canWriteSystems}
+              identifierConfig={
+                publicConfig
+                  ? {
+                      systemIdPrefix: publicConfig.systemIdPrefix,
+                      clientIdPrefix: publicConfig.clientIdPrefix,
+                      normalizeIdentifiers: publicConfig.normalizeIdentifiers,
+                      systemIdSeparator: publicConfig.systemIdSeparator,
+                      clientIdSeparator: publicConfig.clientIdSeparator,
+                    }
+                  : undefined
+              }
               onNotify={notify}
               onSystemsChanged={() => setRefreshTick((t) => t + 1)}
             />
           )}
-          {activeTab === 'users' && (
-            <UsersManager token={session.token} currentUserId={session.user.id} onNotify={notify} />
+          {resolvedActiveTab === 'users' && (
+            <UsersManager
+              token={session.token}
+              currentUserId={session.user.id}
+              canWriteUsers={canWriteUsers}
+              onNotify={notify}
+            />
           )}
-          {activeTab === 'rbac' && <RbacClaimsManager token={session.token} onNotify={notify} />}
-          {activeTab === 'audit-logs' && (
-            <AuditLogs token={session.token} onNotify={notify} refreshSignal={refreshTick} />
+          {resolvedActiveTab === 'rbac' && (
+            <RbacClaimsManager token={session.token} canWriteRoles={canWriteRoles} onNotify={notify} />
           )}
-          {activeTab === 'settings' && (
+          {resolvedActiveTab === 'audit-logs' && (
+            <AuditLogs
+              token={session.token}
+              canReadUsers={canReadUsers}
+              onNotify={notify}
+              refreshSignal={refreshTick}
+            />
+          )}
+          {resolvedActiveTab === 'settings' && (
             <SystemSettings
               token={session.token}
               isSuperAdmin={isSuperAdmin}
@@ -808,15 +981,22 @@ export default function App() {
                   defaultEdgeCacheTtl: updated.defaultEdgeCacheTtl,
                   defaultPrivacyPolicyVersion: updated.defaultPrivacyPolicyVersion,
                   pkceRequired: updated.pkceRequired,
+                  systemIdPrefix: updated.systemIdPrefix,
+                  clientIdPrefix: updated.clientIdPrefix,
+                  normalizeIdentifiers: updated.normalizeIdentifiers,
+                  systemIdSeparator: updated.systemIdSeparator,
+                  clientIdSeparator: updated.clientIdSeparator,
                 });
                 setRefreshTick((t) => t + 1);
               }}
             />
           )}
-          {activeTab === 'idps' && <IdpAndOAuthSandbox token={session.token} onNotify={notify} />}
-          {activeTab === 'graphql' && <GraphqlAndCloudflare token={session.token} onNotify={notify} />}
-          {activeTab === 'get-token' && <TokenPortal standalone={false} onNotify={notify} />}
-          {activeTab === 'compliance' && (
+          {resolvedActiveTab === 'idps' && (
+            <IdpAndOAuthSandbox token={session.token} canWriteSystems={canWriteSystems} onNotify={notify} />
+          )}
+          {resolvedActiveTab === 'graphql' && <GraphqlAndCloudflare token={session.token} onNotify={notify} />}
+          {resolvedActiveTab === 'get-token' && <TokenPortal standalone={false} onNotify={notify} />}
+          {resolvedActiveTab === 'compliance' && (
             <ProfileAndCompliance
               token={session.token}
               mode="compliance"
@@ -824,7 +1004,7 @@ export default function App() {
               onSessionInvalidated={handleLogout}
             />
           )}
-          {activeTab === 'profile' && (
+          {resolvedActiveTab === 'profile' && (
             <ProfileAndCompliance
               token={session.token}
               mode="profile"

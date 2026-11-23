@@ -6,7 +6,8 @@ import type { IamSystem, IdentityProvider } from '../types/iam';
 
 interface IdpAndOAuthSandboxProps {
   token: string;
-  onNotify: (msg: string) => void;
+  canWriteSystems?: boolean;
+  onNotify: (msg: string, variant?: 'success' | 'error' | 'warning') => void;
 }
 
 const IDP_QUERY = `
@@ -38,7 +39,11 @@ const IDP_QUERY = `
   }
 `;
 
-export const IdpAndOAuthSandbox: React.FC<IdpAndOAuthSandboxProps> = ({ token, onNotify }) => {
+export const IdpAndOAuthSandbox: React.FC<IdpAndOAuthSandboxProps> = ({
+  token,
+  canWriteSystems = false,
+  onNotify,
+}) => {
   const [idps, setIdps] = useState<IdentityProvider[]>([]);
   const [systems, setSystems] = useState<IamSystem[]>([]);
   const [editingIdp, setEditingIdp] = useState<IdentityProvider | null>(null);
@@ -217,14 +222,16 @@ export const IdpAndOAuthSandbox: React.FC<IdpAndOAuthSandboxProps> = ({ token, o
                   </div>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setEditingIdp({ ...idp })}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-[#090D16] border border-slate-700 hover:border-slate-500 text-slate-200 rounded transition-colors"
-              >
-                <SlidersHorizontal className="w-3 h-3" />
-                <span>Configurar</span>
-              </button>
+              {canWriteSystems && (
+                <button
+                  type="button"
+                  onClick={() => setEditingIdp({ ...idp })}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs bg-[#090D16] border border-slate-700 hover:border-slate-500 text-slate-200 rounded transition-colors"
+                >
+                  <SlidersHorizontal className="w-3 h-3" />
+                  <span>Configurar</span>
+                </button>
+              )}
             </div>
             <div className="text-[11px] font-mono text-slate-400 space-y-1 pt-2 border-t border-slate-800/70 truncate">
               <div className="truncate">Emissor: {idp.issuerUrl}</div>

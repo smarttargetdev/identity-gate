@@ -55,6 +55,7 @@ import {
   type SystemHealthEventRow,
 } from './telemetry.ts';
 import {
+  buildIdentifierValue,
   getPlatformSettings,
   resetPlatformSettings,
   updatePlatformSettings,
@@ -350,6 +351,11 @@ const schema = buildSchema(`
     requireExplicitConsent: Boolean!
     allowDataPortabilityExport: Boolean!
     allowSelfErasure: Boolean!
+    systemIdPrefix: String!
+    clientIdPrefix: String!
+    normalizeIdentifiers: Boolean!
+    systemIdSeparator: String!
+    clientIdSeparator: String!
     updatedAt: String!
     updatedBy: String!
     runtime: RuntimeSettingsInfo!
@@ -383,9 +389,16 @@ const schema = buildSchema(`
     requireExplicitConsent: Boolean!
     allowDataPortabilityExport: Boolean!
     allowSelfErasure: Boolean!
+    systemIdPrefix: String
+    clientIdPrefix: String
+    normalizeIdentifiers: Boolean
+    systemIdSeparator: String
+    clientIdSeparator: String
   }
 
   input SystemInput {
+    id: String
+    clientId: String
     name: String!
     slug: String!
     description: String
@@ -1332,9 +1345,28 @@ const rootValue = {
     const jwt = requirePermission(ctx, 'iam:systems:write');
     const settings = getPlatformSettings();
     const started = performance.now();
-    const id = `sys-${crypto.randomBytes(4).toString('hex')}`;
     const cleanSlug = String(input.slug).trim();
-    const clientId = `cid_${cleanSlug.replace(/-/g, '_').replace(/[^a-z0-9_]/gi, '_')}`;
+    if (!/^[a-zA-Z0-9_-]+$/.test(cleanSlug)) {
+      throw new Error('INVALID_CODE: O identificador deve conter apenas caracteres alfanumericos, "-" e "_".');
+    }
+    const id = buildIdentifierValue(
+      settings.systemIdPrefix,
+      cleanSlug,
+      settings.normalizeIdentifiers,
+      settings.systemIdSeparator
+    );
+    const clientId = buildIdentifierValue(
+      settings.clientIdPrefix,
+      cleanSlug,
+      settings.normalizeIdentifiers,
+      settings.clientIdSeparator
+    );
+    const existingDup = db
+      .prepare('SELECT id FROM systems WHERE id = ? OR slug = ? OR client_id = ?')
+      .get(id, cleanSlug, clientId) as { id: string } | undefined;
+    if (existingDup) {
+      throw new Error('CONFLICT: Ja existe um sistema com esta identidade, slug ou cliente.');
+    }
     const rawSecret = `csec_${crypto.randomBytes(20).toString('hex')}`;
     const now = new Date().toISOString();
 
@@ -1416,7 +1448,10 @@ const rootValue = {
     if (!existing) throw new Error('NOT_FOUND: Sistema nao encontrado.');
 
     const nextSlug = String(input.slug ?? existing.slug).trim();
-    const nextClientId = `cid_${nextSlug.replace(/-/g, '_').replace(/[^a-z0-9_]/gi, '_')}`;
+    if (!/^[a-zA-Z0-9_-]+$/.test(nextSlug)) {
+      throw new Error('INVALID_CODE: O identificador deve conter apenas caracteres alfanumericos, "-" e "_".');
+    }
+    const nextClientId = existing.client_id;
     const now = new Date().toISOString();
     db.prepare(`
       UPDATE systems SET
@@ -2530,12 +2565,50 @@ export async function graphqlHandler(req: Request, res: Response): Promise<void>
   });
 
   if (result.errors && result.errors.length > 0) {
+    const EXPECTED_DOMAIN_PREFIXES = [
+      'UNAUTHENTICATED:',
+      'FORBIDDEN:',
+      'NOT_FOUND:',
+      'CONFLICT:',
+      'PROTECTED_RESOURCE:',
+      'SELF_DELETE_FORBIDDEN:',
+      'WEAK_PASSWORD:',
+      'PRECONDITION_FAILED:',
+      'INVALID_CODE:',
+      'INVALID_PHONE:',
+      'INVALID_METHOD:',
+      'INVALID_CREDENTIALS:',
+    ];
     for (const gqlErr of result.errors) {
+      const msg = gqlErr.message || '';
+      const isForbidden = msg.startsWith('FORBIDDEN:');
+      const isExpectedDomain = EXPECTED_DOMAIN_PREFIXES.some((prefix) => msg.startsWith(prefix));
+      if (isForbidden) {
+        recordStructuredAudit({
+          actorId: jwt.sub,
+          actorEmail: jwt.email,
+          systemId: jwt.systemId,
+          systemSlug: jwt.sys,
+          action: 'GRAPHQL_ACCESS_DENIED',
+          resourceType: 'graphql',
+          resourceId: opLabel,
+          status: 'denied',
+          ip: req.ip || '0.0.0.0',
+          details: {
+            message: msg,
+            path: gqlErr.path,
+          },
+        });
+        continue;
+      }
+      if (!gqlErr.originalError || isExpectedDomain) {
+        continue;
+      }
       recordSystemException(gqlErr.originalError ?? gqlErr, {
         source: 'graphql',
         operationOrRoute: opLabel,
         httpMethod: req.method,
-        statusCode: gqlErr.originalError ? 500 : 400,
+        statusCode: 500,
         actorEmail: jwt.email,
         systemSlug: jwt.sys,
         metadata: {

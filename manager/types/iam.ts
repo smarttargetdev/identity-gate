@@ -238,6 +238,11 @@ export interface PublicPlatformConfig {
   defaultEdgeCacheTtl: number;
   defaultPrivacyPolicyVersion: string;
   pkceRequired: boolean;
+  systemIdPrefix: string;
+  clientIdPrefix: string;
+  normalizeIdentifiers: boolean;
+  systemIdSeparator: '_' | '-';
+  clientIdSeparator: '_' | '-';
 }
 
 export interface PlatformSystemSettings {
@@ -268,6 +273,11 @@ export interface PlatformSystemSettings {
   requireExplicitConsent: boolean;
   allowDataPortabilityExport: boolean;
   allowSelfErasure: boolean;
+  systemIdPrefix: string;
+  clientIdPrefix: string;
+  normalizeIdentifiers: boolean;
+  systemIdSeparator: '_' | '-';
+  clientIdSeparator: '_' | '-';
   updatedAt: string;
   updatedBy: string;
   runtime?: {

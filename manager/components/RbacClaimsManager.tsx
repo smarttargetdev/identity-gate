@@ -6,7 +6,8 @@ import type { IamSystem, Permission, Role } from '../types/iam';
 
 interface RbacClaimsManagerProps {
   token: string;
-  onNotify: (msg: string) => void;
+  canWriteRoles?: boolean;
+  onNotify: (msg: string, variant?: 'success' | 'error' | 'warning') => void;
 }
 
 const RBAC_QUERY = `
@@ -36,7 +37,11 @@ const RBAC_QUERY = `
   }
 `;
 
-export const RbacClaimsManager: React.FC<RbacClaimsManagerProps> = ({ token, onNotify }) => {
+export const RbacClaimsManager: React.FC<RbacClaimsManagerProps> = ({
+  token,
+  canWriteRoles = false,
+  onNotify,
+}) => {
   const [systems, setSystems] = useState<IamSystem[]>([]);
   const [selectedSystemId, setSelectedSystemId] = useState('identity-secure-gate');
   const [roles, setRoles] = useState<Role[]>([]);
@@ -109,6 +114,10 @@ export const RbacClaimsManager: React.FC<RbacClaimsManagerProps> = ({ token, onN
 
   const handleSaveRole = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canWriteRoles) {
+      onNotify('Permissão iam:roles:write necessária para editar roles.', 'warning');
+      return;
+    }
     if (!editingRoleId) return;
     try {
       await gqlRequest({
@@ -141,6 +150,10 @@ export const RbacClaimsManager: React.FC<RbacClaimsManagerProps> = ({ token, onN
 
   const handleCreatePermission = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canWriteRoles) {
+      onNotify('Permissão iam:roles:write necessária para criar permissões.', 'warning');
+      return;
+    }
     if (!newPermCode.trim()) return;
     try {
       await gqlRequest({
@@ -165,6 +178,10 @@ export const RbacClaimsManager: React.FC<RbacClaimsManagerProps> = ({ token, onN
 
   const handleCreateRole = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canWriteRoles) {
+      onNotify('Permissão iam:roles:write necessária para criar roles.', 'warning');
+      return;
+    }
     if (!newRoleName.trim()) return;
     try {
       const { data } = await gqlRequest<{ createRole: Role }>({
@@ -194,6 +211,10 @@ export const RbacClaimsManager: React.FC<RbacClaimsManagerProps> = ({ token, onN
   };
 
   const handleDeleteRole = async (id: string) => {
+    if (!canWriteRoles) {
+      onNotify('Permissão iam:roles:write necessária para remover roles.', 'warning');
+      return;
+    }
     try {
       await gqlRequest({
         token,
@@ -257,30 +278,34 @@ export const RbacClaimsManager: React.FC<RbacClaimsManagerProps> = ({ token, onN
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            onClick={() => {
-              setNewPermCode('');
-              setNewPermDesc('');
-              setCreatingPermModal(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-[#111827] border border-slate-700 hover:border-slate-500 text-slate-200 rounded-md"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Nova Permissão</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setNewRoleName('');
-              setNewRoleDesc('');
-              setCreatingRoleModal(true);
-            }}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold bg-[#F6821F] hover:bg-[#e27316] text-slate-950 rounded-md"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Nova Role</span>
-          </button>
+          {canWriteRoles && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setNewPermCode('');
+                  setNewPermDesc('');
+                  setCreatingPermModal(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-[#111827] border border-slate-700 hover:border-slate-500 text-slate-200 rounded-md"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Nova Permissão</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setNewRoleName('');
+                  setNewRoleDesc('');
+                  setCreatingRoleModal(true);
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold bg-[#F6821F] hover:bg-[#e27316] text-slate-950 rounded-md"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Nova Role</span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -309,30 +334,32 @@ export const RbacClaimsManager: React.FC<RbacClaimsManagerProps> = ({ token, onN
                       {r.permissions.length} permissões · {r.claims.length} claims {r.isDefault ? '· padrão' : ''}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        openEditRoleModal(r);
-                      }}
-                      className="p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-800"
-                      title="Configurar Role, Permissões e Claims"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        void handleDeleteRole(r.id);
-                      }}
-                      className="p-1.5 text-slate-500 hover:text-red-400 rounded hover:bg-slate-800"
-                      title="Remover Role"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+                  {canWriteRoles && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          openEditRoleModal(r);
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-800"
+                        title="Configurar Role, Permissões e Claims"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(ev) => {
+                          ev.stopPropagation();
+                          void handleDeleteRole(r.id);
+                        }}
+                        className="p-1.5 text-slate-500 hover:text-red-400 rounded hover:bg-slate-800"
+                        title="Remover Role"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
               {roles.length === 0 && (

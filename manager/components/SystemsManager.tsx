@@ -4,9 +4,19 @@ import { gqlRequest } from '../lib/graphqlClient';
 import { InfoTooltip } from './InfoTooltip';
 import type { IamSystem } from '../types/iam';
 
+interface IdentifierConfig {
+  systemIdPrefix: string;
+  clientIdPrefix: string;
+  normalizeIdentifiers: boolean;
+  systemIdSeparator: '_' | '-';
+  clientIdSeparator: '_' | '-';
+}
+
 interface SystemsManagerProps {
   token: string;
-  onNotify: (msg: string) => void;
+  canWriteSystems?: boolean;
+  identifierConfig?: IdentifierConfig;
+  onNotify: (msg: string, variant?: 'success' | 'error' | 'warning') => void;
   onSystemsChanged: () => void;
 }
 
@@ -36,7 +46,19 @@ const SYSTEMS_QUERY = `
   }
 `;
 
-export const SystemsManager: React.FC<SystemsManagerProps> = ({ token, onNotify, onSystemsChanged }) => {
+export const SystemsManager: React.FC<SystemsManagerProps> = ({
+  token,
+  canWriteSystems = false,
+  identifierConfig = {
+    systemIdPrefix: 'sys',
+    clientIdPrefix: 'cli',
+    normalizeIdentifiers: true,
+    systemIdSeparator: '_',
+    clientIdSeparator: '_',
+  },
+  onNotify,
+  onSystemsChanged,
+}) => {
   const [systems, setSystems] = useState<IamSystem[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<IamSystem | null>(null);
@@ -108,8 +130,34 @@ export const SystemsManager: React.FC<SystemsManagerProps> = ({ token, onNotify,
     setStatus(sys.status);
   };
 
+  const sysSep = identifierConfig.systemIdSeparator === '-' ? '-' : '_';
+  const cliSep = identifierConfig.clientIdSeparator === '-' ? '-' : '_';
+  const formatToken = (val: string, sep: '_' | '-') =>
+    identifierConfig.normalizeIdentifiers
+      ? val.trim().replace(/[^a-zA-Z0-9]+/g, sep).replace(new RegExp(`^[${sep}]+|[${sep}]+$`, 'g'), '')
+      : val.trim().replace(/[^a-zA-Z0-9_-]/g, '');
+
+  const cleanSysPrefix = formatToken(identifierConfig.systemIdPrefix, sysSep).replace(/[-_]+$/g, '') || 'sys';
+  const cleanCliPrefix = formatToken(identifierConfig.clientIdPrefix, cliSep).replace(/[-_]+$/g, '') || 'cli';
+  const sysSlugPart = formatToken(slug, sysSep).replace(/^[-_]+/g, '');
+  const cliSlugPart = formatToken(slug, cliSep).replace(/^[-_]+/g, '');
+  const systemIdentity = editing
+    ? editing.id
+    : sysSlugPart
+      ? `${cleanSysPrefix}${sysSep}${sysSlugPart}`
+      : `${cleanSysPrefix}${sysSep}{SLUG}`;
+  const systemClientId = editing
+    ? editing.clientId
+    : cliSlugPart
+      ? `${cleanCliPrefix}${cliSep}${cliSlugPart}`
+      : `${cleanCliPrefix}${cliSep}{SLUG}`;
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canWriteSystems) {
+      onNotify('Permissão iam:systems:write necessária para alterar sistemas.', 'warning');
+      return;
+    }
     const redirectUris = redirectUrisText
       .split('\n')
       .map((u) => u.trim())
@@ -151,7 +199,13 @@ export const SystemsManager: React.FC<SystemsManagerProps> = ({ token, onNotify,
               createSystem(input: $input) { id name clientId }
             }
           `,
-          variables: { input },
+          variables: {
+            input: {
+              ...input,
+              id: systemIdentity,
+              clientId: systemClientId,
+            },
+          },
         });
         onNotify(`Sistema OAuth 2.0 "${name}" criado via GraphQL.`);
       }
@@ -165,6 +219,10 @@ export const SystemsManager: React.FC<SystemsManagerProps> = ({ token, onNotify,
   };
 
   const handleDelete = async (sys: IamSystem) => {
+    if (!canWriteSystems) {
+      onNotify('Permissão iam:systems:write necessária para remover sistemas.', 'warning');
+      return;
+    }
     try {
       const { data } = await gqlRequest<{ deleteSystem: { success: boolean; message: string } }>({
         token,
@@ -185,6 +243,10 @@ export const SystemsManager: React.FC<SystemsManagerProps> = ({ token, onNotify,
   };
 
   const handleRotateSecret = async (sys: IamSystem) => {
+    if (!canWriteSystems) {
+      onNotify('Permissão iam:systems:write necessária para rotacionar secrets.', 'warning');
+      return;
+    }
     try {
       const { data } = await gqlRequest<{
         rotateSystemSecret: { systemId: string; clientId: string; newClientSecret: string };
@@ -213,17 +275,26 @@ export const SystemsManager: React.FC<SystemsManagerProps> = ({ token, onNotify,
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <h1 className="font-display text-xl font-semibold text-white">Sistemas OAuth 2.0</h1>
+          <h1 className="font-display text-xl font-semibold text-white">Sistemas Gerenciados</h1>
           <InfoTooltip text="Gerenciamento via GraphQL de aplicações clientes, TTL de JWT, 2FA obrigatório e cache distribuído por sistema." />
         </div>
-        <button
-          type="button"
-          onClick={openCreateModal}
-          className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold bg-[#F6821F] hover:bg-[#e27316] text-slate-950 rounded-md transition-colors whitespace-nowrap"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Criar Sistema</span>
-        </button>
+        {canWriteSystems && (
+          <button
+            type="button"
+            onClick={openCreateModal}
+            aria-label="Criar novo sistema"
+            title="Criar novo sistema"
+            className="relative group flex items-center justify-center p-2 text-xs font-semibold bg-[#F6821F] hover:bg-[#e27316] text-slate-950 rounded-md transition-colors shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span
+              role="tooltip"
+              className="absolute top-full right-0 mt-1.5 z-40 px-2 py-1 rounded-md bg-[#090D16] border border-slate-700/90 text-[11px] font-medium text-slate-200 shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150"
+            >
+              Criar novo sistema
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Systems Table */}
@@ -233,10 +304,16 @@ export const SystemsManager: React.FC<SystemsManagerProps> = ({ token, onNotify,
           <table className="w-full text-left border-collapse">
             <thead className="border-b border-slate-800 text-[11px] text-slate-400">
               <tr>
-                <th className="py-3 px-4 font-medium">Sistema / Slug</th>
-                <th className="py-3 px-4 font-medium">Client ID</th>
-                <th className="py-3 px-4 font-medium">Assinatura & JWT TTL</th>
-                <th className="py-3 px-4 font-medium">Política 2FA & Cache</th>
+                <th className="py-3 px-4 font-medium">Nome</th>
+                <th className="py-3 px-4 font-medium">Identificador</th>
+                <th className="py-3 px-4 font-medium" title="chave">Sistema</th>
+                <th className="py-3 px-4 font-medium">Cliente</th>
+                <th className="py-3 px-4 font-medium">Status</th>
+                <th className="py-3 px-4 font-medium">Policiamento</th>
+                <th className="py-3 px-4 font-medium">Algorítmo</th>
+                <th className="py-3 px-4 font-medium">Expiração</th>
+                <th className="py-3 px-4 font-medium">Segurança</th>
+                <th className="py-3 px-4 font-medium">Cache</th>
                 <th className="py-3 px-4 font-medium text-right">Usuários</th>
                 <th className="py-3 px-4 font-medium text-right">Ações</th>
               </tr>
@@ -244,63 +321,101 @@ export const SystemsManager: React.FC<SystemsManagerProps> = ({ token, onNotify,
             <tbody className="divide-y divide-slate-800/60 text-xs">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-500">
+                  <td colSpan={12} className="py-8 text-center text-slate-500">
                     Consultando sistemas via GraphQL...
                   </td>
                 </tr>
               ) : (
                 systems.map((sys) => (
                   <tr key={sys.id} className="hover:bg-slate-800/35 transition-colors">
-                    <td className="py-3 px-4">
-                      <div className="font-medium text-white">{sys.name}</div>
-                      <div className="text-[11px] text-slate-400 font-mono">
-                        {sys.slug} · {sys.status === 'active' ? 'ativo' : 'desativado'} · pol v{sys.policyVersion}
+                    <td className="py-3 px-4 font-medium text-white whitespace-nowrap">{sys.name}</td>
+                    <td className="py-3 px-4 font-mono text-slate-300 whitespace-nowrap">{sys.slug}</td>
+                    <td className="py-3 px-4 font-mono text-slate-400 whitespace-nowrap" title="chave">
+                      {sys.id}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-slate-300 whitespace-nowrap">{sys.clientId}</td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <span
+                        className={
+                          sys.status === 'active'
+                            ? 'text-emerald-400 font-medium'
+                            : 'text-red-400 font-medium'
+                        }
+                      >
+                        {sys.status === 'active' ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 font-mono tabular-nums text-slate-300 whitespace-nowrap">
+                      v{sys.policyVersion}
+                    </td>
+                    <td className="py-3 px-4 font-mono text-slate-300 whitespace-nowrap">{sys.signingAlg}</td>
+                    <td className="py-3 px-4 font-mono tabular-nums text-slate-300 whitespace-nowrap">
+                      {sys.jwtTtlSeconds}s
+                    </td>
+                    <td className="py-3 px-4 text-slate-300 whitespace-nowrap">
+                      <div className="inline-flex items-center gap-2">
+                        <span
+                          tabIndex={0}
+                          aria-label={sys.requireMfa ? 'Obrigatório' : 'Opcional'}
+                          title={sys.requireMfa ? 'Obrigatório' : 'Opcional'}
+                          className="relative group inline-flex items-center justify-center focus:outline-none"
+                        >
+                          <ShieldCheck
+                            className={`w-4 h-4 ${sys.requireMfa ? 'text-amber-400' : 'text-slate-500'}`}
+                          />
+                          <span
+                            role="tooltip"
+                            className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-40 px-2 py-1 rounded-md bg-[#090D16] border border-slate-700/90 text-[11px] font-medium text-slate-200 shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150"
+                          >
+                            {sys.requireMfa ? 'Obrigatório' : 'Opcional'}
+                          </span>
+                        </span>
+                        <span className="font-mono text-[11px] text-slate-400">
+                          {sys.allowedMfaMethods && sys.allowedMfaMethods.length > 0
+                            ? sys.allowedMfaMethods.map((m) => m.toUpperCase()).join(', ')
+                            : 'Nenhum'}
+                        </span>
                       </div>
                     </td>
-                    <td className="py-3 px-4 font-mono text-slate-300">{sys.clientId}</td>
-                    <td className="py-3 px-4 font-mono tabular-nums text-slate-300">
-                      {sys.signingAlg} · {sys.jwtTtlSeconds}s
-                    </td>
-                    <td className="py-3 px-4 text-slate-300">
-                      <div className="flex items-center gap-1.5">
-                        <ShieldCheck className={`w-3.5 h-3.5 ${sys.requireMfa ? 'text-amber-400' : 'text-slate-500'}`} />
-                        <span>{sys.requireMfa ? '2FA Obrigatório' : '2FA Opcional'}</span>
-                        <span aria-hidden="true">·</span>
-                        <span className="font-mono tabular-nums text-slate-400">Edge {sys.edgeCacheTtl}s</span>
-                      </div>
+                    <td className="py-3 px-4 font-mono tabular-nums text-slate-400 whitespace-nowrap">
+                      {sys.edgeCacheTtl}s
                     </td>
                     <td className="py-3 px-4 text-right font-mono tabular-nums text-slate-200">
                       {sys.userCount ?? 0}
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <div className="inline-flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleRotateSecret(sys)}
-                          title="Rotacionar Client Secret"
-                          className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-amber-400 transition-colors"
-                        >
-                          <Key className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(sys)}
-                          title="Editar Sistema"
-                          className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        {sys.id !== 'identity-secure-gate' && (
+                      {canWriteSystems ? (
+                        <div className="inline-flex items-center gap-1.5">
                           <button
                             type="button"
-                            onClick={() => handleDelete(sys)}
-                            title="Remover Sistema"
-                            className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-red-400 transition-colors"
+                            onClick={() => handleRotateSecret(sys)}
+                            title="Rotacionar Client Secret"
+                            className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-amber-400 transition-colors"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Key className="w-3.5 h-3.5" />
                           </button>
-                        )}
-                      </div>
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(sys)}
+                            title="Editar Sistema"
+                            className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          {sys.id !== 'identity-secure-gate' && (
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(sys)}
+                              title="Remover Sistema"
+                              className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-red-400 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-slate-500">Somente leitura</span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -333,7 +448,7 @@ export const SystemsManager: React.FC<SystemsManagerProps> = ({ token, onNotify,
             <form onSubmit={handleSave} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Nome do Sistema</label>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Nome</label>
                   <input
                     type="text"
                     required
@@ -344,14 +459,39 @@ export const SystemsManager: React.FC<SystemsManagerProps> = ({ token, onNotify,
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1">Slug Identificador</label>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Identificador</label>
                   <input
                     type="text"
                     required
+                    pattern="[A-Za-z0-9_-]+"
+                    title="Apenas caracteres alfanuméricos, '-' e '_'"
                     value={slug}
-                    onChange={(e) => setSlug(e.target.value)}
+                    onChange={(e) => setSlug(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))}
                     placeholder="ex: partners-portal"
                     className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-sm font-mono text-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Sistema</label>
+                  <input
+                    type="text"
+                    readOnly
+                    disabled
+                    value={systemIdentity}
+                    className="w-full bg-[#090D16]/60 border border-slate-800 rounded-md px-3 py-2 text-sm font-mono text-slate-400 cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Cliente</label>
+                  <input
+                    type="text"
+                    readOnly
+                    disabled
+                    value={systemClientId}
+                    className="w-full bg-[#090D16]/60 border border-slate-800 rounded-md px-3 py-2 text-sm font-mono text-slate-400 cursor-not-allowed"
                   />
                 </div>
               </div>

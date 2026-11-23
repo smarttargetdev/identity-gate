@@ -61,6 +61,8 @@ export type OverviewSection =
 interface OverviewTelemetryProps {
   token: string;
   section?: OverviewSection;
+  canReadUsers?: boolean;
+  canReadAuditLogs?: boolean;
   onNavigateSection?: (section: OverviewSection) => void;
   onNotify: (msg: string, variant?: 'success' | 'error' | 'warning') => void;
 }
@@ -140,47 +142,67 @@ const OVERVIEW_BASE_QUERY = `
   }
 `;
 
+const OVERVIEW_USERS_STATS_FIELDS = `
+  users(limit: 200) {
+    id
+    email
+    displayName
+    status
+    totpEnabled
+    phoneVerified
+    mfaPreferredMethod
+    permVersion
+    lastLoginAt
+    createdAt
+    sessions {
+      id
+      systemId
+      systemName
+      authMethod
+      ipMasked
+      createdAt
+      expiresAt
+      revokedAt
+    }
+  }
+`;
+
+const OVERVIEW_AUDIT_STATS_FIELDS = `
+  auditLogs(limit: 200) {
+    id
+    traceId
+    actorHash
+    actorMasked
+    systemId
+    systemSlug
+    action
+    resourceType
+    resourceId
+    status
+    cacheStatus
+    durationMs
+    ipMasked
+    detailsJson
+    createdAt
+  }
+`;
+
 const OVERVIEW_ADMIN_STATS_QUERY = `
   query OverviewAdminKeyStats {
-    users(limit: 200) {
-      id
-      email
-      displayName
-      status
-      totpEnabled
-      phoneVerified
-      mfaPreferredMethod
-      permVersion
-      lastLoginAt
-      createdAt
-      sessions {
-        id
-        systemId
-        systemName
-        authMethod
-        ipMasked
-        createdAt
-        expiresAt
-        revokedAt
-      }
-    }
-    auditLogs(limit: 200) {
-      id
-      traceId
-      actorHash
-      actorMasked
-      systemId
-      systemSlug
-      action
-      resourceType
-      resourceId
-      status
-      cacheStatus
-      durationMs
-      ipMasked
-      detailsJson
-      createdAt
-    }
+    ${OVERVIEW_USERS_STATS_FIELDS}
+    ${OVERVIEW_AUDIT_STATS_FIELDS}
+  }
+`;
+
+const OVERVIEW_USERS_ONLY_QUERY = `
+  query OverviewUsersStats {
+    ${OVERVIEW_USERS_STATS_FIELDS}
+  }
+`;
+
+const OVERVIEW_AUDIT_ONLY_QUERY = `
+  query OverviewAuditStats {
+    ${OVERVIEW_AUDIT_STATS_FIELDS}
   }
 `;
 
@@ -875,6 +897,8 @@ const RecentAlertsList: React.FC<RecentAlertsListProps> = ({
 export const OverviewTelemetry: React.FC<OverviewTelemetryProps> = ({
   token,
   section = 'overview',
+  canReadUsers = false,
+  canReadAuditLogs = false,
   onNavigateSection,
   onNotify,
 }) => {
@@ -939,50 +963,110 @@ export const OverviewTelemetry: React.FC<OverviewTelemetryProps> = ({
       let deniedCount = 0;
       let errorCount = 0;
 
-      try {
-        const { data: adminData, diagnostics: adminDiag } = await gqlRequest<{
-          users: IamUser[];
-          auditLogs: AuditLog[];
-        }>({
-          token,
-          query: OVERVIEW_ADMIN_STATS_QUERY,
-          operationName: 'OverviewAdminKeyStats',
-        });
-        setLastDiag(adminDiag);
-        setUsersSnapshot(adminData.users);
-        setLogsSnapshot(adminData.auditLogs);
+      if (canReadUsers || canReadAuditLogs) {
+        try {
+          let usersList: IamUser[] | null = null;
+          let logsList: AuditLog[] | null = null;
 
-        const extractedAlerts = adminData.auditLogs.filter(isSecurityAlertLog);
-        setRecentAlerts(extractedAlerts);
-
-        if (!initialAlertsLoadedRef.current) {
-          for (const a of extractedAlerts) {
-            seenAlertIdsRef.current.add(a.id);
-          }
-          initialAlertsLoadedRef.current = true;
-        } else {
-          const newlyDetected = extractedAlerts.filter((a) => !seenAlertIdsRef.current.has(a.id));
-          if (newlyDetected.length > 0) {
-            for (const a of newlyDetected) {
-              seenAlertIdsRef.current.add(a.id);
-            }
-            setUnreadAlertIds((prev) => {
-              const next = new Set(prev);
-              for (const a of newlyDetected) next.add(a.id);
-              return next;
+          if (canReadUsers && canReadAuditLogs) {
+            const { data: adminData, diagnostics: adminDiag } = await gqlRequest<{
+              users: IamUser[];
+              auditLogs: AuditLog[];
+            }>({
+              token,
+              query: OVERVIEW_ADMIN_STATS_QUERY,
+              operationName: 'OverviewAdminKeyStats',
             });
-            const newest = newlyDetected[0];
-            const meta = classifyAlertLabel(newest.action);
-            onNotifyRef.current(
-              `Alerta em tempo real: ${meta.title} (${newest.actorMasked} · ${newest.ipMasked})`,
-              'warning'
-            );
+            setLastDiag(adminDiag);
+            usersList = adminData.users;
+            logsList = adminData.auditLogs;
+          } else if (canReadUsers) {
+            const { data: usersData, diagnostics: usersDiag } = await gqlRequest<{
+              users: IamUser[];
+            }>({
+              token,
+              query: OVERVIEW_USERS_ONLY_QUERY,
+              operationName: 'OverviewUsersStats',
+            });
+            setLastDiag(usersDiag);
+            usersList = usersData.users;
+          } else if (canReadAuditLogs) {
+            const { data: auditData, diagnostics: auditDiag } = await gqlRequest<{
+              auditLogs: AuditLog[];
+            }>({
+              token,
+              query: OVERVIEW_AUDIT_ONLY_QUERY,
+              operationName: 'OverviewAuditStats',
+            });
+            setLastDiag(auditDiag);
+            logsList = auditData.auditLogs;
           }
-        }
 
-        activeUsers = adminData.users.filter((u) => u.status === 'active').length;
-        for (const u of adminData.users) {
-          for (const s of u.sessions || []) {
+          if (usersList) {
+            setUsersSnapshot(usersList);
+            activeUsers = usersList.filter((u) => u.status === 'active').length;
+            for (const u of usersList) {
+              for (const s of u.sessions || []) {
+                if (!s.revokedAt && Date.parse(s.expiresAt) > nowMs) {
+                  validTokens += 1;
+                } else {
+                  revokedOrExpiredTokens += 1;
+                }
+              }
+            }
+          } else {
+            if (baseData.me) {
+              setUsersSnapshot([baseData.me]);
+            }
+            for (const s of baseData.me?.sessions || []) {
+              if (!s.revokedAt && Date.parse(s.expiresAt) > nowMs) {
+                validTokens += 1;
+              } else {
+                revokedOrExpiredTokens += 1;
+              }
+            }
+          }
+
+          if (logsList) {
+            setLogsSnapshot(logsList);
+            const extractedAlerts = logsList.filter(isSecurityAlertLog);
+            setRecentAlerts(extractedAlerts);
+
+            if (!initialAlertsLoadedRef.current) {
+              for (const a of extractedAlerts) {
+                seenAlertIdsRef.current.add(a.id);
+              }
+              initialAlertsLoadedRef.current = true;
+            } else {
+              const newlyDetected = extractedAlerts.filter((a) => !seenAlertIdsRef.current.has(a.id));
+              if (newlyDetected.length > 0) {
+                for (const a of newlyDetected) {
+                  seenAlertIdsRef.current.add(a.id);
+                }
+                setUnreadAlertIds((prev) => {
+                  const next = new Set(prev);
+                  for (const a of newlyDetected) next.add(a.id);
+                  return next;
+                });
+                const newest = newlyDetected[0];
+                const meta = classifyAlertLabel(newest.action);
+                onNotifyRef.current(
+                  `Alerta em tempo real: ${meta.title} (${newest.actorMasked} · ${newest.ipMasked})`,
+                  'warning'
+                );
+              }
+            }
+
+            const warnSummary = computeWarningsFromLogs(logsList);
+            recentWarnings = warnSummary.securityAlertCount;
+            deniedCount = warnSummary.deniedCount;
+            errorCount = warnSummary.errorCount;
+          }
+        } catch {
+          if (baseData.me) {
+            setUsersSnapshot([baseData.me]);
+          }
+          for (const s of baseData.me?.sessions || []) {
             if (!s.revokedAt && Date.parse(s.expiresAt) > nowMs) {
               validTokens += 1;
             } else {
@@ -990,11 +1074,7 @@ export const OverviewTelemetry: React.FC<OverviewTelemetryProps> = ({
             }
           }
         }
-        const warnSummary = computeWarningsFromLogs(adminData.auditLogs);
-        recentWarnings = warnSummary.securityAlertCount;
-        deniedCount = warnSummary.deniedCount;
-        errorCount = warnSummary.errorCount;
-      } catch {
+      } else {
         if (baseData.me) {
           setUsersSnapshot([baseData.me]);
         }
@@ -1022,7 +1102,7 @@ export const OverviewTelemetry: React.FC<OverviewTelemetryProps> = ({
     } catch (err) {
       onNotifyRef.current(err instanceof Error ? err.message : 'Erro ao carregar telemetria GraphQL.', 'error');
     }
-  }, [token]);
+  }, [token, canReadUsers, canReadAuditLogs]);
 
   useEffect(() => {
     void loadData();
@@ -1793,14 +1873,20 @@ export const OverviewTelemetry: React.FC<OverviewTelemetryProps> = ({
     return (
       <div className="space-y-6">
         {renderHeaderControls()}
-        <RecentAlertsList
-          alerts={recentAlerts}
-          unreadIds={unreadAlertIds}
-          sseConnected={sseConnected}
-          refreshIntervalMs={refreshIntervalMs}
-          onMarkAllRead={() => setUnreadAlertIds(new Set())}
-          expanded
-        />
+        {canReadAuditLogs ? (
+          <RecentAlertsList
+            alerts={recentAlerts}
+            unreadIds={unreadAlertIds}
+            sseConnected={sseConnected}
+            refreshIntervalMs={refreshIntervalMs}
+            onMarkAllRead={() => setUnreadAlertIds(new Set())}
+            expanded
+          />
+        ) : (
+          <div className="bg-[#111827] border border-slate-800/90 rounded-lg p-6 text-xs text-slate-400">
+            Acesso restrito: a permissão <span className="font-mono text-slate-200">iam:audit:read</span> é necessária para visualizar alertas de segurança.
+          </div>
+        )}
       </div>
     );
   }
@@ -1810,12 +1896,19 @@ export const OverviewTelemetry: React.FC<OverviewTelemetryProps> = ({
     return (
       <div className="space-y-6">
         {renderHeaderControls()}
-        <AuditLogs
-          token={token}
-          onNotify={onNotify}
-          refreshSignal={refreshTick}
-          onLogsUpdated={handleLogsUpdated}
-        />
+        {canReadAuditLogs ? (
+          <AuditLogs
+            token={token}
+            canReadUsers={canReadUsers}
+            onNotify={onNotify}
+            refreshSignal={refreshTick}
+            onLogsUpdated={handleLogsUpdated}
+          />
+        ) : (
+          <div className="bg-[#111827] border border-slate-800/90 rounded-lg p-6 text-xs text-slate-400">
+            Acesso restrito: a permissão <span className="font-mono text-slate-200">iam:audit:read</span> é necessária para consultar logs de auditoria.
+          </div>
+        )}
       </div>
     );
   }
@@ -2043,7 +2136,7 @@ export const OverviewTelemetry: React.FC<OverviewTelemetryProps> = ({
           refreshIntervalMs={refreshIntervalMs}
           onMarkAllRead={() => setUnreadAlertIds(new Set())}
           maxItems={3}
-          onDetail={onNavigateSection ? () => go('overview-alerts') : undefined}
+          onDetail={canReadAuditLogs && onNavigateSection ? () => go('overview-alerts') : undefined}
         />
       </div>
 
@@ -2055,7 +2148,7 @@ export const OverviewTelemetry: React.FC<OverviewTelemetryProps> = ({
             <h2 className="text-sm font-semibold text-white">Eventos de Auditoria</h2>
             <InfoTooltip text="Resumo dos 5 eventos de auditoria mais recentes. Abra o submenu para filtros completos, busca e CSV." />
           </div>
-          {onNavigateSection && (
+          {canReadAuditLogs && onNavigateSection && (
             <button
               type="button"
               onClick={() => go('overview-audit')}
