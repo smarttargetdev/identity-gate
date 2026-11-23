@@ -9,21 +9,21 @@ export default defineConfig(() => {
     plugins: [
       react(),
       tailwindcss(),
-      // Copies src/assets into dist/ so root-relative URLs like
-      // "/src/assets/images/..." (e.g. generate_image output) still resolve
+      // Copies manager/assets into dist/ so root-relative URLs like
+      // "/manager/assets/images/..." (e.g. generate_image output) still resolve
       // in production builds. Do not remove.
       {
-        name: 'copy-unbundled-src-assets',
+        name: 'copy-unbundled-manager-assets',
         apply: 'build',
         closeBundle(error?: Error): void {
           if (error) {
             return;
           }
           const distDir = path.resolve(__dirname, 'dist');
-          const srcAssets = path.resolve(__dirname, 'src/assets');
-          const distAssets = path.resolve(distDir, 'src/assets');
-          if (fs.existsSync(distDir) && fs.existsSync(srcAssets)) {
-            fs.cpSync(srcAssets, distAssets, {recursive: true, force: true});
+          const managerAssets = path.resolve(__dirname, 'manager/assets');
+          const distAssets = path.resolve(distDir, 'manager/assets');
+          if (fs.existsSync(distDir) && fs.existsSync(managerAssets)) {
+            fs.cpSync(managerAssets, distAssets, {recursive: true, force: true});
           }
         },
       },

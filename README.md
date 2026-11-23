@@ -135,7 +135,7 @@ NODE_ENV=production PORT=3000 npm start
 │   ├── graphql.ts               # Schema GraphQL, DataLoaders (zero N+1), queries e mutations RBAC/LGPD
 │   ├── telemetry.ts             # Hub SSE em tempo real e fila assíncrona em lote para audit_logs
 │   └── cloudflareExport.ts      # Gerador de wrangler.toml, schema.d1.sql e Worker TS (.zip)
-└── src/
+└── manager/
     ├── App.tsx                  # Layout principal, sidebar, breadcrumb, diagnósticos GraphQL e modal de sessão
     ├── hooks/
     │   └── useSessionExpiration.ts  # Hook de contagem regressiva do JWT e alerta 5 min antes de expirar
