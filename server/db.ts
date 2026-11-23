@@ -136,7 +136,7 @@ if (!fs.existsSync(dataDir)) {
 
 const dbPath = process.env.SQLITE_PATH
   ? path.resolve(process.cwd(), process.env.SQLITE_PATH)
-  : path.join(dataDir, 'vektor-iam.sqlite');
+  : path.join(dataDir, 'identity-gate.sqlite');
 
 export const db = new Database(dbPath);
 

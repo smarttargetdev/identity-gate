@@ -63,7 +63,7 @@ O **Identity Secure Gate (ISG)** centraliza autenticação, autorização e audi
    ```
 
 Na primeira inicialização, o servidor executará automaticamente:
-- A criação da pasta `./data/` e do banco SQLite em modo **WAL** (`./data/vektor-iam.sqlite`);
+- A criação da pasta `./data/` e do banco SQLite em modo **WAL** (`./data/identity-gate.sqlite`);
 - A aplicação do schema relacional completo com índices de cobertura;
 - A geração e persistência do par de chaves assimétricas **RSA (RS256 / JWKS)** na tabela `kv_store`;
 - O *seed* inicial com 3 sistemas OAuth 2.0, roles/permissões/claims RBAC, 4 provedores externos (IdPs) e contas de demonstração.
@@ -80,7 +80,7 @@ Todas as variáveis suportadas são configuradas via arquivo `.env` ou variávei
 | :--- | :--- | :--- | :--- |
 | `PORT` | `3000` | Não | Porta HTTP onde o Express e o Vite servem a aplicação (`0.0.0.0`). |
 | `APP_URL` | Detectado via request | Recomendado | URL pública base da aplicação (ex.: `https://iam.sua-empresa.com`), usada no OIDC Discovery e callbacks OAuth. |
-| `SQLITE_PATH` | `./data/vektor-iam.sqlite` | Não | Caminho do arquivo de banco SQLite (local ou volume persistente). |
+| `SQLITE_PATH` | `./data/identity-gate.sqlite` | Não | Caminho do arquivo de banco SQLite (local ou volume persistente). |
 | `IAM_JWT_ISSUER` | `https://isg.edge.local` | Recomendado | Claim `iss` assinada nos JWTs emitidos e exibida no `/.well-known/openid-configuration`. |
 | `IAM_MASTER_SECRET` | Chave dev padrão | **Sim (Prod)** | Chave mestra (mín. 32 bytes) usada para criptografia **AES-256-GCM** dos segredos TOTP em repouso e assinatura interna. |
 | `GOOGLE_OAUTH_CLIENT_ID` | *(vazio — modo simulado)* | Não | Client ID real do Google OAuth 2.0. Quando definido, desativa o modo simulado para Google. |
