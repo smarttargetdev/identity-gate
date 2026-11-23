@@ -26,6 +26,7 @@ import {
   ServerCrash,
   Zap,
   History,
+  KeyRound,
 } from 'lucide-react';
 import { AuthGate } from './components/AuthGate';
 import { OverviewTelemetry, type OverviewSection } from './components/OverviewTelemetry';
@@ -37,6 +38,7 @@ import { IdpAndOAuthSandbox } from './components/IdpAndOAuthSandbox';
 import { GraphqlAndCloudflare } from './components/GraphqlAndCloudflare';
 import { ProfileAndCompliance } from './components/ProfileAndCompliance';
 import { SystemSettings } from './components/SystemSettings';
+import { TokenPortal } from './components/TokenPortal';
 import { LatencySparkline } from './components/LatencySparkline';
 import { subscribeDiagnostics } from './lib/graphqlClient';
 import { playHealthAlertSound, unlockHealthAlertAudio } from './lib/healthAlertAudio';
@@ -53,6 +55,7 @@ type NavTab =
   | 'settings'
   | 'idps'
   | 'graphql'
+  | 'get-token'
   | 'compliance'
   | 'profile';
 
@@ -82,6 +85,7 @@ const NAV_ITEMS: Array<{
   { id: 'settings', label: 'Configurações', group: 'admin', icon: Settings, shortcut: 'c', adminOnly: true },
   { id: 'idps', label: 'Provedores', group: 'infra', icon: Globe, shortcut: 'i' },
   { id: 'graphql', label: 'Infraestrutura', group: 'infra', icon: Code2, shortcut: 'f' },
+  { id: 'get-token', label: 'Obter Token', group: 'infra', icon: KeyRound, shortcut: 't' },
   { id: 'compliance', label: 'Conformidade', group: 'self', icon: FileCheck2, shortcut: 'l' },
   { id: 'profile', label: 'Perfil', group: 'self', icon: UserCircle2, shortcut: 'p' },
 ];
@@ -91,10 +95,10 @@ const OVERVIEW_SUBMENUS: Array<{
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { id: 'overview-stats', label: 'Estatísticas-Chave', icon: Users },
-  { id: 'overview-trend', label: 'Tendência (24h)', icon: TrendingUp },
-  { id: 'overview-http', label: 'Códigos HTTP (24h)', icon: ServerCrash },
-  { id: 'overview-edge', label: 'Borda & SQLite WAL', icon: Zap },
+  { id: 'overview-stats', label: 'Estatísticas', icon: Users },
+  { id: 'overview-trend', label: 'Usuários Ativos', icon: TrendingUp },
+  { id: 'overview-http', label: 'Respostas do Servidor', icon: ServerCrash },
+  { id: 'overview-edge', label: 'Métricas de Borda', icon: Zap },
   { id: 'overview-health', label: 'Histórico de Saúde', icon: History },
   { id: 'overview-alerts', label: 'Alertas Recentes', icon: AlertOctagon },
   { id: 'overview-audit', label: 'Logs de Auditoria', icon: ScrollText },
@@ -307,6 +311,13 @@ export default function App() {
     setActiveTab(hasAdmin ? 'overview' : 'profile');
   };
 
+  const isTokenPortalRoute =
+    typeof window !== 'undefined' && /^\/obter-token\/?$/i.test(window.location.pathname);
+
+  if (isTokenPortalRoute) {
+    return <TokenPortal standalone />;
+  }
+
   if (!session) {
     return <AuthGate onAuthenticated={handleAuthenticated} />;
   }
@@ -335,9 +346,11 @@ export default function App() {
             >
               {!isSidebarCollapsed && (
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-7 h-7 rounded-md bg-[#F6821F]/15 border border-[#F6821F]/40 flex items-center justify-center text-[#F6821F] font-mono text-[10px] font-bold shrink-0">
-                    ISG
-                  </div>
+                  <img
+                    src="https://assets.smarttarget.com.br/company/target.svg"
+                    alt={platformName}
+                    className="w-7 h-7 object-contain shrink-0"
+                  />
                   <span className="font-display text-xs font-semibold tracking-tight text-white whitespace-nowrap truncate">
                     {platformName}
                   </span>
@@ -796,6 +809,7 @@ export default function App() {
           )}
           {activeTab === 'idps' && <IdpAndOAuthSandbox token={session.token} onNotify={notify} />}
           {activeTab === 'graphql' && <GraphqlAndCloudflare token={session.token} onNotify={notify} />}
+          {activeTab === 'get-token' && <TokenPortal standalone={false} onNotify={notify} />}
           {activeTab === 'compliance' && (
             <ProfileAndCompliance
               token={session.token}

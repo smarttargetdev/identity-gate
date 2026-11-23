@@ -38,7 +38,7 @@ const RBAC_QUERY = `
 
 export const RbacClaimsManager: React.FC<RbacClaimsManagerProps> = ({ token, onNotify }) => {
   const [systems, setSystems] = useState<IamSystem[]>([]);
-  const [selectedSystemId, setSelectedSystemId] = useState('sys-vektor-core');
+  const [selectedSystemId, setSelectedSystemId] = useState('identity-secure-gate');
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [selectedRoleId, setSelectedRoleId] = useState<string>('');
@@ -289,7 +289,7 @@ export const RbacClaimsManager: React.FC<RbacClaimsManagerProps> = ({ token, onN
         <div className="lg:col-span-4 space-y-5">
           <div className="bg-[#111827] border border-slate-800/90 rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-white">Funções (Roles) do Sistema</h2>
+              <h2 className="text-sm font-semibold text-white">Funções do Sistema</h2>
               <span className="text-[11px] font-mono tabular-nums text-slate-400">{roles.length}</span>
             </div>
             <div className="space-y-1.5">

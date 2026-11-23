@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  Bug,
   Database,
   KeyRound,
   Lock,
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 import { gqlRequest } from '../lib/graphqlClient';
 import { playHealthAlertSound } from '../lib/healthAlertAudio';
+import { DetailedErrorLog } from './DetailedErrorLog';
 import { InfoTooltip } from './InfoTooltip';
 import type { ExecutionEnvironment, PlatformSystemSettings } from '../types/iam';
 
@@ -25,7 +27,7 @@ interface SystemSettingsProps {
   onSettingsUpdated?: (settings: PlatformSystemSettings) => void;
 }
 
-type SettingsTab = 'environment' | 'jwt' | 'security' | 'edge' | 'compliance';
+type SettingsTab = 'environment' | 'jwt' | 'security' | 'edge' | 'compliance' | 'errors';
 
 const SYSTEM_SETTINGS_QUERY = `
   query AdminSystemSettings {
@@ -184,6 +186,7 @@ const TABS: Array<{
   { id: 'security', label: 'Segurança & 2FA', icon: Lock },
   { id: 'edge', label: 'Edge Cache & Auditoria', icon: Database },
   { id: 'compliance', label: 'LGPD & Privacidade', icon: ShieldCheck },
+  { id: 'errors', label: 'Log de Erros Detalhado', icon: Bug },
 ];
 
 export const SystemSettings: React.FC<SystemSettingsProps> = ({
@@ -197,6 +200,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<SettingsTab>('environment');
+  const [errorLogCount, setErrorLogCount] = useState<number | null>(null);
   const [confirmProdModal, setConfirmProdModal] = useState(false);
   const [confirmResetModal, setConfirmResetModal] = useState(false);
 
@@ -450,22 +454,40 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             >
               <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-[#F6821F]' : 'text-slate-500'}`} />
               <span>{tab.label}</span>
+              {tab.id === 'errors' && errorLogCount !== null && errorLogCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded bg-red-950/70 border border-red-800/60 text-[10px] font-mono tabular-nums text-red-300">
+                  {errorLogCount}
+                </span>
+              )}
             </button>
           );
         })}
       </div>
 
-      {loading || !draft ? (
-        <div className="bg-[#111827] border border-slate-800/90 rounded-lg p-8 text-center text-xs text-slate-500">
-          Carregando parâmetros do sistema via GraphQL...
+      {activeTab === 'errors' && (
+        <div role="tabpanel" id="settings-panel-errors" aria-labelledby="settings-tab-errors">
+          <DetailedErrorLog
+            token={token}
+            telemetryStreamEnabled={draft?.telemetryStreamEnabled ?? true}
+            onNotify={onNotify}
+            onCountChange={setErrorLogCount}
+          />
         </div>
+      )}
+
+      {loading || !draft ? (
+        activeTab !== 'errors' && (
+          <div className="bg-[#111827] border border-slate-800/90 rounded-lg p-8 text-center text-xs text-slate-500">
+            Carregando parâmetros do sistema via GraphQL...
+          </div>
+        )
       ) : (
         <form
           id="system-settings-form"
           onSubmit={handleRequestSave}
           role="tabpanel"
           aria-labelledby={activeTabMeta ? `settings-tab-${activeTabMeta.id}` : undefined}
-          className="space-y-6"
+          className={activeTab === 'errors' ? 'hidden' : 'space-y-6'}
         >
           {/* 1. Ambiente de Execução & Plataforma */}
           {activeTab === 'environment' && (

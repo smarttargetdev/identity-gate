@@ -1,6 +1,12 @@
 import type { Request, Response } from 'express';
 import crypto from 'node:crypto';
-import { db, dbStats, queueAuditLog, type AuditLogRow } from './db.ts';
+import {
+  db,
+  dbStats,
+  queueAuditLog,
+  type AuditLogRow,
+  type SystemErrorLogRow,
+} from './db.ts';
 import { hashSubjectForAudit, maskEmail, maskIp } from './cryptoAuth.ts';
 import { getPlatformSettings } from './settings.ts';
 
@@ -264,4 +270,119 @@ export function sseTelemetryHandler(req: Request, res: Response): void {
 
 export function getActiveSseCount(): number {
   return sseClients.size;
+}
+
+export function recordSystemException(
+  err: unknown,
+  context?: {
+    source?: string;
+    operationOrRoute?: string;
+    httpMethod?: string;
+    statusCode?: number;
+    actorEmail?: string;
+    systemSlug?: string | null;
+    metadata?: Record<string, unknown>;
+  }
+): SystemErrorLogRow | null {
+  try {
+    const settings = getPlatformSettings();
+    const errorObj = err instanceof Error ? err : new Error(typeof err === 'string' ? err : JSON.stringify(err));
+    const errorName = errorObj.name || 'Error';
+    const message = errorObj.message || 'Erro interno não especificado.';
+    const stackTrace =
+      errorObj.stack && errorObj.stack.trim().length > 0
+        ? errorObj.stack
+        : `${errorName}: ${message}\n    at <stack unavailable>`;
+
+    const rawActor = context?.actorEmail || 'system';
+    const actorMasked =
+      rawActor === 'system' || rawActor === 'anonymous'
+        ? rawActor
+        : settings.piiMaskingEnabled
+          ? maskEmail(rawActor)
+          : rawActor;
+
+    const entry: SystemErrorLogRow = {
+      id: `err_${crypto.randomUUID()}`,
+      trace_id: `tr_${crypto.randomBytes(6).toString('hex')}`,
+      error_name: errorName.slice(0, 120),
+      message: message.slice(0, 1000),
+      stack_trace: stackTrace.slice(0, 12000),
+      source: (context?.source || 'server').slice(0, 60),
+      operation_or_route: (context?.operationOrRoute || '').slice(0, 200),
+      http_method: (context?.httpMethod || '').slice(0, 16),
+      status_code: Number.isFinite(context?.statusCode) ? Number(context?.statusCode) : 500,
+      actor_masked: actorMasked,
+      system_slug: context?.systemSlug ?? null,
+      metadata_json: JSON.stringify(context?.metadata ?? {}),
+      created_at: new Date().toISOString(),
+    };
+
+    db.prepare(`
+      INSERT INTO system_error_logs (
+        id, trace_id, error_name, message, stack_trace, source,
+        operation_or_route, http_method, status_code, actor_masked,
+        system_slug, metadata_json, created_at
+      ) VALUES (
+        @id, @trace_id, @error_name, @message, @stack_trace, @source,
+        @operation_or_route, @http_method, @status_code, @actor_masked,
+        @system_slug, @metadata_json, @created_at
+      )
+    `).run(entry);
+    dbStats.totalWrites += 1;
+
+    // Keep table bounded to the latest 100 exceptions
+    db.prepare(`
+      DELETE FROM system_error_logs
+      WHERE id NOT IN (
+        SELECT id FROM system_error_logs ORDER BY created_at DESC, rowid DESC LIMIT 100
+      )
+    `).run();
+
+    const logPayload = JSON.stringify({
+      level: entry.source === 'diagnostic' ? 'info' : 'error',
+      event: entry.source === 'diagnostic' ? 'iam.diagnostic_exception' : 'iam.exception',
+      trace_id: entry.trace_id,
+      error_name: entry.error_name,
+      message: entry.message,
+      source: entry.source,
+      operation_or_route: entry.operation_or_route,
+      status_code: entry.status_code,
+      timestamp: entry.created_at,
+    });
+    if (entry.source === 'diagnostic') {
+      console.info(logPayload);
+    } else {
+      console.error(logPayload);
+    }
+
+    if (settings.telemetryStreamEnabled) {
+      const sseData = `event: system_error\ndata: ${JSON.stringify(entry)}\n\n`;
+      for (const client of sseClients) {
+        try {
+          client.write(sseData);
+        } catch {
+          sseClients.delete(client);
+        }
+      }
+    }
+
+    return entry;
+  } catch (persistErr) {
+    console.error('Failed to record system exception:', persistErr);
+    return null;
+  }
+}
+
+export function getRecentSystemErrors(limit = 10): SystemErrorLogRow[] {
+  const safeLimit = Math.min(50, Math.max(1, Math.floor(limit)));
+  return db
+    .prepare('SELECT * FROM system_error_logs ORDER BY created_at DESC, rowid DESC LIMIT ?')
+    .all(safeLimit) as SystemErrorLogRow[];
+}
+
+export function clearSystemErrors(): number {
+  const result = db.prepare('DELETE FROM system_error_logs').run();
+  dbStats.totalWrites += result.changes;
+  return result.changes;
 }

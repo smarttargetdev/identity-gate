@@ -1,7 +1,7 @@
+import 'dotenv/config';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import dotenv from 'dotenv';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import {
@@ -33,14 +33,41 @@ import {
   setEdgeCached,
 } from './server/edgeCache.ts';
 import { graphqlHandler } from './server/graphql.ts';
-import { recordStructuredAudit, sseTelemetryHandler } from './server/telemetry.ts';
+import {
+  recordStructuredAudit,
+  recordSystemException,
+  sseTelemetryHandler,
+} from './server/telemetry.ts';
 import { createCloudflareBundleZip, getCloudflareBundleFiles } from './server/cloudflareExport.ts';
 import { getPlatformSettings, getPublicPlatformConfig } from './server/settings.ts';
 
-dotenv.config();
-
 const PORT = Number(process.env.PORT || 3000);
 const failedLoginTracker = new Map<string, { count: number; resetAt: number }>();
+const idpOAuthStateStore = new Map<
+  string,
+  { provider: string; redirectUri: string; systemSlug?: string; expiresAt: number }
+>();
+const idpOAuthTicketStore = new Map<
+  string,
+  {
+    providerType: string;
+    externalSubject: string;
+    externalEmail: string;
+    externalName: string;
+    systemSlug?: string;
+    expiresAt: number;
+  }
+>();
+
+function pruneIdpStores() {
+  const now = Date.now();
+  for (const [k, v] of idpOAuthStateStore.entries()) {
+    if (v.expiresAt <= now) idpOAuthStateStore.delete(k);
+  }
+  for (const [k, v] of idpOAuthTicketStore.entries()) {
+    if (v.expiresAt <= now) idpOAuthTicketStore.delete(k);
+  }
+}
 
 function getAppUrl(req: express.Request): string {
   const configuredBase = getPlatformSettings().appBaseUrl;
@@ -975,6 +1002,159 @@ async function startServer() {
     }
   });
 
+  async function completeFederatedLogin(params: {
+    providerType: string;
+    externalSubject?: string;
+    externalEmail: string;
+    externalName?: string;
+    systemSlug?: string;
+    isSimulation: boolean;
+    req: express.Request;
+    started: number;
+  }): Promise<{ status: number; body: Record<string, unknown> }> {
+    const { providerType, externalSubject, externalEmail, externalName, systemSlug, isSimulation, req, started } = params;
+    const system = getSystemBySlugOrId(systemSlug);
+    if (!system) {
+      return { status: 404, body: { error: 'Sistema nao encontrado.' } };
+    }
+
+    const allowedIdps = JSON.parse(system.allowed_idps || '[]') as string[];
+    if (!allowedIdps.includes(providerType)) {
+      return { status: 403, body: { error: `Provedor ${providerType} nao esta habilitado na politica de ${system.name}.` } };
+    }
+
+    const settings = getPlatformSettings();
+    const cleanEmail = externalEmail.trim().toLowerCase();
+    const subjectKey = (externalSubject || sha256Hex(`${providerType}:${cleanEmail}`).slice(0, 16)).trim();
+    const linkedIdentity = db
+      .prepare('SELECT user_id FROM external_identities WHERE provider_type = ? AND external_subject = ?')
+      .get(providerType, subjectKey) as { user_id: string } | undefined;
+
+    let user = (linkedIdentity
+      ? db.prepare('SELECT * FROM users WHERE id = ?').get(linkedIdentity.user_id)
+      : db.prepare('SELECT * FROM users WHERE email = ?').get(cleanEmail)) as UserRow | undefined;
+    const now = new Date().toISOString();
+    let jitProvisioned = false;
+
+    if (!user) {
+      if (!settings.jitProvisioningEnabled) {
+        return {
+          status: 403,
+          body: {
+            error: 'Provisionamento automático (JIT) para provedores externos está desativado nas configurações globais.',
+          },
+        };
+      }
+      const userId = `usr-${crypto.randomBytes(4).toString('hex')}`;
+      const defaultRole = db
+        .prepare('SELECT id FROM roles WHERE system_id = ? ORDER BY is_default DESC, created_at ASC LIMIT 1')
+        .get(system.id) as { id: string } | undefined;
+      if (!defaultRole) {
+        return { status: 400, body: { error: 'Sistema não possui role padrão para provisionamento JIT.' } };
+      }
+
+      db.prepare(`
+        INSERT INTO users (
+          id, email, display_name, password_hash, phone_number, phone_verified,
+          mfa_preferred_method, totp_secret_enc, totp_enabled, backup_codes_hash,
+          status, perm_version, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, NULL, 0, 'none', NULL, 0, NULL, 'active', 1, ?, ?)
+      `).run(
+        userId,
+        cleanEmail,
+        externalName?.trim() || cleanEmail.split('@')[0],
+        hashPassword(crypto.randomBytes(16).toString('hex')),
+        now,
+        now
+      );
+
+      db.prepare('INSERT INTO user_system_bindings (id, user_id, system_id, role_id, created_at) VALUES (?, ?, ?, ?, ?)').run(
+        `bnd-${crypto.randomBytes(4).toString('hex')}`,
+        userId,
+        system.id,
+        defaultRole.id,
+        now
+      );
+      dbStats.totalWrites += 2;
+      jitProvisioned = true;
+      user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as UserRow;
+    }
+
+    if (user.status !== 'active') {
+      return { status: 403, body: { error: 'Usuário suspenso ou inativo.' } };
+    }
+
+    // Link external identity idempotently
+    db.prepare(`
+      INSERT OR IGNORE INTO external_identities (id, user_id, provider_type, external_subject, external_email, linked_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(`ext-${crypto.randomBytes(4).toString('hex')}`, user.id, providerType, subjectKey, cleanEmail, now);
+
+    const availableMethods = resolveAvailableMfaMethods(user, system);
+    const mustChallengeMfa =
+      Boolean(settings.globalRequireMfa) ||
+      Boolean(system.require_mfa) ||
+      Boolean(user.totp_enabled) ||
+      (Boolean(user.phone_verified) && user.mfa_preferred_method === 'sms');
+
+    if (mustChallengeMfa && availableMethods.length > 0) {
+      const mfaToken = `mfa_${crypto.randomBytes(24).toString('hex')}`;
+      const expiresAt = new Date(Date.now() + settings.oauthCodeTtlSeconds * 1000).toISOString();
+      db.prepare(
+        'INSERT INTO mfa_challenges (token, user_id, system_id, auth_method, expires_at) VALUES (?, ?, ?, ?, ?)'
+      ).run(mfaToken, user.id, system.id, `idp:${providerType}`, expiresAt);
+
+      return {
+        status: 200,
+        body: {
+          requiresMfa: true,
+          mfaToken,
+          availableMethods,
+          preferredMethod: user.mfa_preferred_method !== 'none' ? user.mfa_preferred_method : availableMethods[0],
+          phoneMasked: user.phone_number ? `${user.phone_number.slice(0, 4)}****${user.phone_number.slice(-3)}` : null,
+          system: { id: system.id, name: system.name, slug: system.slug },
+        },
+      };
+    }
+
+    const issued = await issueSystemJwt({ user, system, amr: [`idp:${providerType}`] });
+    createSessionAndAudit({ user, system, jti: issued.jti, expiresAt: issued.expiresAt, authMethod: `idp:${providerType}`, req });
+
+    recordStructuredAudit({
+      actorId: user.id,
+      actorEmail: user.email,
+      systemId: system.id,
+      systemSlug: system.slug,
+      action: 'IDP_FEDERATED_LOGIN',
+      resourceType: 'idp',
+      resourceId: providerType,
+      status: 'success',
+      durationMs: performance.now() - started,
+      ip: req.ip,
+      details: { providerType, jitProvisioned, simulation: isSimulation },
+    });
+
+    return {
+      status: 200,
+      body: {
+        requiresMfa: false,
+        accessToken: issued.token,
+        tokenType: 'Bearer',
+        expiresIn: system.jwt_ttl_seconds,
+        expiresAt: issued.expiresAt,
+        system: { id: system.id, name: system.name, slug: system.slug, signingAlg: system.signing_alg },
+        user: {
+          id: user.id,
+          email: user.email,
+          displayName: user.display_name,
+          roles: issued.resolved.roles,
+          permissions: issued.resolved.permissions,
+          claims: issued.resolved.customClaims,
+        },
+      },
+    };
+  }
+
   // External IdP OAuth / Simulation Routes
   app.get('/api/auth/idp/:provider/url', (req, res) => {
     const { provider } = req.params;
@@ -992,35 +1172,264 @@ async function startServer() {
       return;
     }
 
+    const clientId =
+      provider === 'github'
+        ? process.env.GITHUB_OAUTH_CLIENT_ID || idp.client_id
+        : provider === 'google'
+          ? process.env.GOOGLE_OAUTH_CLIENT_ID || idp.client_id
+          : idp.client_id;
+
+    if (provider === 'github' && !process.env.GITHUB_OAUTH_CLIENT_SECRET) {
+      res.status(400).json({ error: 'GITHUB_OAUTH_CLIENT_SECRET nao configurado no servidor.' });
+      return;
+    }
+    if (provider === 'google' && !process.env.GOOGLE_OAUTH_CLIENT_SECRET) {
+      res.status(400).json({ error: 'GOOGLE_OAUTH_CLIENT_SECRET nao configurado no servidor.' });
+      return;
+    }
+
+    pruneIdpStores();
     const redirectUri = `${getAppUrl(req)}/api/auth/idp/${provider}/callback`;
+    const state = crypto.randomBytes(24).toString('hex');
+    const systemSlug = typeof req.query.systemSlug === 'string' ? req.query.systemSlug : undefined;
+
+    idpOAuthStateStore.set(state, {
+      provider,
+      redirectUri,
+      systemSlug,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    });
+
     const params = new URLSearchParams({
-      client_id: idp.client_id,
+      client_id: clientId,
       redirect_uri: redirectUri,
       response_type: 'code',
       scope: idp.scopes,
-      state: crypto.randomBytes(12).toString('hex'),
+      state,
     });
     res.json({ simulation: false, url: `${idp.auth_url}?${params.toString()}`, redirectUri });
   });
 
-  app.get(['/api/auth/idp/:provider/callback', '/api/auth/idp/:provider/callback/'], (req, res) => {
+  app.get(['/api/auth/idp/:provider/callback', '/api/auth/idp/:provider/callback/'], async (req, res) => {
     const { provider } = req.params;
-    const { code } = req.query;
-    res.send(`
-      <html>
-        <body style="background:#090D16;color:#F1F5F9;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;">
-          <script>
-            if (window.opener) {
-              window.opener.postMessage({ type: 'VEKTOR_IDP_CALLBACK', provider: ${JSON.stringify(provider)}, code: ${JSON.stringify(String(code || ''))} }, '*');
-              window.close();
-            } else {
-              window.location.href = '/';
+    const code = typeof req.query.code === 'string' ? req.query.code : '';
+    const state = typeof req.query.state === 'string' ? req.query.state : '';
+    const oauthError = typeof req.query.error === 'string' ? req.query.error : '';
+    const oauthErrorDesc = typeof req.query.error_description === 'string' ? req.query.error_description : '';
+
+    const renderPopupPage = (payload: Record<string, unknown>, message: string) => {
+      const safeJson = JSON.stringify(payload).replace(/</g, '\\u003c');
+      const safeMessage = message.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      res.send(`
+        <html>
+          <body style="background:#090D16;color:#F1F5F9;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+            <script>
+              if (window.opener) {
+                window.opener.postMessage(${safeJson}, '*');
+                window.close();
+              } else {
+                window.location.href = '/';
+              }
+            </script>
+            <p>${safeMessage}</p>
+          </body>
+        </html>
+      `);
+    };
+
+    if (oauthError) {
+      renderPopupPage(
+        { type: 'VEKTOR_IDP_ERROR', provider, error: oauthErrorDesc || oauthError },
+        'Falha na autenticacao externa. Esta janela fechara automaticamente.'
+      );
+      return;
+    }
+
+    pruneIdpStores();
+    const stateEntry = state ? idpOAuthStateStore.get(state) : undefined;
+    if (state) idpOAuthStateStore.delete(state);
+
+    if (!code || !stateEntry || stateEntry.provider !== provider || stateEntry.expiresAt <= Date.now()) {
+      renderPopupPage(
+        { type: 'VEKTOR_IDP_ERROR', provider, error: 'Sessao OAuth invalida ou expirada. Tente novamente.' },
+        'Sessao OAuth expirada. Esta janela fechara automaticamente.'
+      );
+      return;
+    }
+
+    const idp = db.prepare('SELECT * FROM identity_providers WHERE provider_type = ? AND enabled = 1').get(provider) as
+      | IdentityProviderRow
+      | undefined;
+
+    if (!idp) {
+      renderPopupPage(
+        { type: 'VEKTOR_IDP_ERROR', provider, error: 'Provedor externo nao habilitado.' },
+        'Provedor nao habilitado.'
+      );
+      return;
+    }
+
+    try {
+      let externalSubject = '';
+      let externalEmail = '';
+      let externalName = '';
+
+      if (provider === 'github') {
+        const clientId = process.env.GITHUB_OAUTH_CLIENT_ID || idp.client_id;
+        const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET;
+        if (!clientSecret) {
+          throw new Error('GITHUB_OAUTH_CLIENT_SECRET nao configurado no servidor.');
+        }
+
+        const tokenResp = await fetch(idp.token_url, {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            code,
+            redirect_uri: stateEntry.redirectUri,
+          }),
+        });
+
+        const tokenJson = (await tokenResp.json()) as { access_token?: string; error_description?: string; error?: string };
+        if (!tokenResp.ok || !tokenJson.access_token) {
+          throw new Error(tokenJson.error_description || tokenJson.error || 'Falha ao trocar codigo OAuth do GitHub.');
+        }
+
+        const userResp = await fetch(idp.userinfo_url, {
+          headers: {
+            Authorization: `Bearer ${tokenJson.access_token}`,
+            Accept: 'application/vnd.github+json',
+            'User-Agent': 'Identity-Secure-Gate',
+          },
+        });
+        if (!userResp.ok) {
+          throw new Error('Falha ao obter perfil do usuario no GitHub.');
+        }
+        const ghUser = (await userResp.json()) as { id: number | string; login: string; name?: string | null; email?: string | null };
+        externalSubject = String(ghUser.id);
+        externalName = (ghUser.name || ghUser.login || '').trim();
+        externalEmail = (ghUser.email || '').trim().toLowerCase();
+
+        if (!externalEmail) {
+          const emailsResp = await fetch('https://api.github.com/user/emails', {
+            headers: {
+              Authorization: `Bearer ${tokenJson.access_token}`,
+              Accept: 'application/vnd.github+json',
+              'User-Agent': 'Identity-Secure-Gate',
+            },
+          });
+          if (emailsResp.ok) {
+            const emails = (await emailsResp.json()) as Array<{ email: string; primary: boolean; verified: boolean }>;
+            const preferred =
+              emails.find((e) => e.primary && e.verified) ||
+              emails.find((e) => e.verified) ||
+              emails[0];
+            if (preferred?.email) {
+              externalEmail = preferred.email.trim().toLowerCase();
             }
-          </script>
-          <p>Autenticacao externa concluida. Esta janela fechara automaticamente.</p>
-        </body>
-      </html>
-    `);
+          }
+        }
+
+        if (!externalEmail && ghUser.login) {
+          externalEmail = `${ghUser.login.toLowerCase()}@users.noreply.github.com`;
+        }
+      } else if (provider === 'google') {
+        const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID || idp.client_id;
+        const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+        if (!clientSecret) {
+          throw new Error('GOOGLE_OAUTH_CLIENT_SECRET nao configurado no servidor.');
+        }
+
+        const tokenResp = await fetch(idp.token_url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            code,
+            redirect_uri: stateEntry.redirectUri,
+            grant_type: 'authorization_code',
+          }),
+        });
+        const tokenJson = (await tokenResp.json()) as { access_token?: string; error_description?: string; error?: string };
+        if (!tokenResp.ok || !tokenJson.access_token) {
+          throw new Error(tokenJson.error_description || tokenJson.error || 'Falha ao trocar codigo OAuth do Google.');
+        }
+
+        const userResp = await fetch(idp.userinfo_url, {
+          headers: { Authorization: `Bearer ${tokenJson.access_token}` },
+        });
+        if (!userResp.ok) {
+          throw new Error('Falha ao obter perfil do usuario no Google.');
+        }
+        const gUser = (await userResp.json()) as { sub: string; email?: string; name?: string };
+        externalSubject = String(gUser.sub || '');
+        externalEmail = String(gUser.email || '').trim().toLowerCase();
+        externalName = String(gUser.name || externalEmail.split('@')[0] || '').trim();
+      } else {
+        throw new Error(`Troca de codigo OAuth nao implementada para ${provider}.`);
+      }
+
+      if (!externalEmail) {
+        throw new Error('Provedor nao retornou um e-mail valido.');
+      }
+
+      const ticket = crypto.randomBytes(24).toString('hex');
+      idpOAuthTicketStore.set(ticket, {
+        providerType: provider,
+        externalSubject,
+        externalEmail,
+        externalName: externalName || externalEmail.split('@')[0],
+        systemSlug: stateEntry.systemSlug,
+        expiresAt: Date.now() + 5 * 60 * 1000,
+      });
+
+      renderPopupPage(
+        { type: 'VEKTOR_IDP_CALLBACK', provider, ticket },
+        'Autenticacao externa concluida. Esta janela fechara automaticamente.'
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao concluir autenticacao externa.';
+      renderPopupPage(
+        { type: 'VEKTOR_IDP_ERROR', provider, error: msg },
+        'Erro na autenticacao externa. Esta janela fechara automaticamente.'
+      );
+    }
+  });
+
+  app.post('/api/auth/idp/complete', async (req, res) => {
+    const started = performance.now();
+    const { ticket, systemSlug } = (req.body || {}) as { ticket?: string; systemSlug?: string };
+    if (!ticket) {
+      res.status(400).json({ error: 'Ticket OAuth obrigatorio.' });
+      return;
+    }
+
+    pruneIdpStores();
+    const ticketData = idpOAuthTicketStore.get(ticket);
+    idpOAuthTicketStore.delete(ticket);
+
+    if (!ticketData || ticketData.expiresAt <= Date.now()) {
+      res.status(401).json({ error: 'Ticket OAuth invalido ou expirado.' });
+      return;
+    }
+
+    const result = await completeFederatedLogin({
+      providerType: ticketData.providerType,
+      externalSubject: ticketData.externalSubject,
+      externalEmail: ticketData.externalEmail,
+      externalName: ticketData.externalName,
+      systemSlug: systemSlug || ticketData.systemSlug,
+      isSimulation: false,
+      req,
+      started,
+    });
+    res.status(result.status).json(result.body);
   });
 
   app.post('/api/auth/idp/simulate', async (req, res) => {
@@ -1037,129 +1446,28 @@ async function startServer() {
       return;
     }
 
-    const system = getSystemBySlugOrId(systemSlug);
-    if (!system) {
-      res.status(404).json({ error: 'Sistema nao encontrado.' });
+    const idp = db.prepare('SELECT * FROM identity_providers WHERE provider_type = ? AND enabled = 1').get(providerType) as
+      | IdentityProviderRow
+      | undefined;
+    if (!idp) {
+      res.status(404).json({ error: 'Provedor externo nao habilitado.' });
+      return;
+    }
+    if (!idp.simulation_mode) {
+      res.status(403).json({ error: `Provedor ${providerType} opera em modo OAuth real (simulacao desabilitada).` });
       return;
     }
 
-    const allowedIdps = JSON.parse(system.allowed_idps || '[]') as string[];
-    if (!allowedIdps.includes(providerType)) {
-      res.status(403).json({ error: `Provedor ${providerType} nao esta habilitado na politica de ${system.name}.` });
-      return;
-    }
-
-    const settings = getPlatformSettings();
-    const cleanEmail = externalEmail.trim().toLowerCase();
-    let user = db.prepare('SELECT * FROM users WHERE email = ?').get(cleanEmail) as UserRow | undefined;
-    const now = new Date().toISOString();
-
-    if (!user) {
-      if (!settings.jitProvisioningEnabled) {
-        res.status(403).json({
-          error: 'Provisionamento automático (JIT) para provedores externos está desativado nas configurações globais.',
-        });
-        return;
-      }
-      const userId = `usr-${crypto.randomBytes(4).toString('hex')}`;
-      const defaultRole = db
-        .prepare('SELECT id FROM roles WHERE system_id = ? ORDER BY is_default DESC, created_at ASC LIMIT 1')
-        .get(system.id) as { id: string } | undefined;
-      if (!defaultRole) {
-        res.status(400).json({ error: 'Sistema não possui role padrão para provisionamento JIT.' });
-        return;
-      }
-
-      db.prepare(`
-        INSERT INTO users (
-          id, email, display_name, password_hash, phone_number, phone_verified,
-          mfa_preferred_method, totp_secret_enc, totp_enabled, backup_codes_hash,
-          status, perm_version, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, NULL, 0, 'none', NULL, 0, NULL, 'active', 1, ?, ?)
-      `).run(userId, cleanEmail, externalName?.trim() || cleanEmail.split('@')[0], hashPassword(crypto.randomBytes(16).toString('hex')), now, now);
-
-      db.prepare('INSERT INTO user_system_bindings (id, user_id, system_id, role_id, created_at) VALUES (?, ?, ?, ?, ?)').run(
-        `bnd-${crypto.randomBytes(4).toString('hex')}`,
-        userId,
-        system.id,
-        defaultRole.id,
-        now
-      );
-      dbStats.totalWrites += 2;
-      user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as UserRow;
-    }
-
-    // Link external identity idempotently
-    db.prepare(`
-      INSERT OR IGNORE INTO external_identities (id, user_id, provider_type, external_subject, external_email, linked_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
-      `ext-${crypto.randomBytes(4).toString('hex')}`,
-      user.id,
+    const result = await completeFederatedLogin({
       providerType,
-      sha256Hex(`${providerType}:${cleanEmail}`).slice(0, 16),
-      cleanEmail,
-      now
-    );
-
-    const availableMethods = resolveAvailableMfaMethods(user, system);
-    const mustChallengeMfa =
-      Boolean(settings.globalRequireMfa) ||
-      Boolean(system.require_mfa) ||
-      Boolean(user.totp_enabled) ||
-      (Boolean(user.phone_verified) && user.mfa_preferred_method === 'sms');
-
-    if (mustChallengeMfa && availableMethods.length > 0) {
-      const mfaToken = `mfa_${crypto.randomBytes(24).toString('hex')}`;
-      const expiresAt = new Date(Date.now() + settings.oauthCodeTtlSeconds * 1000).toISOString();
-      db.prepare(
-        'INSERT INTO mfa_challenges (token, user_id, system_id, auth_method, expires_at) VALUES (?, ?, ?, ?, ?)'
-      ).run(mfaToken, user.id, system.id, `idp:${providerType}`, expiresAt);
-
-      res.json({
-        requiresMfa: true,
-        mfaToken,
-        availableMethods,
-        preferredMethod: user.mfa_preferred_method !== 'none' ? user.mfa_preferred_method : availableMethods[0],
-        phoneMasked: user.phone_number ? `${user.phone_number.slice(0, 4)}****${user.phone_number.slice(-3)}` : null,
-        system: { id: system.id, name: system.name, slug: system.slug },
-      });
-      return;
-    }
-
-    const issued = await issueSystemJwt({ user, system, amr: [`idp:${providerType}`] });
-    createSessionAndAudit({ user, system, jti: issued.jti, expiresAt: issued.expiresAt, authMethod: `idp:${providerType}`, req });
-
-    recordStructuredAudit({
-      actorId: user.id,
-      actorEmail: user.email,
-      systemId: system.id,
-      systemSlug: system.slug,
-      action: 'IDP_FEDERATED_LOGIN',
-      resourceType: 'idp',
-      resourceId: providerType,
-      status: 'success',
-      durationMs: performance.now() - started,
-      ip: req.ip,
-      details: { providerType, jitProvisioned: true },
+      externalEmail,
+      externalName,
+      systemSlug,
+      isSimulation: true,
+      req,
+      started,
     });
-
-    res.json({
-      requiresMfa: false,
-      accessToken: issued.token,
-      tokenType: 'Bearer',
-      expiresIn: system.jwt_ttl_seconds,
-      expiresAt: issued.expiresAt,
-      system: { id: system.id, name: system.name, slug: system.slug, signingAlg: system.signing_alg },
-      user: {
-        id: user.id,
-        email: user.email,
-        displayName: user.display_name,
-        roles: issued.resolved.roles,
-        permissions: issued.resolved.permissions,
-        claims: issued.resolved.customClaims,
-      },
-    });
+    res.status(result.status).json(result.body);
   });
 
   // GraphQL Endpoint (All Admin CRUD + User Self-Service + Edge Cache)
@@ -1184,17 +1492,76 @@ async function startServer() {
 
   // Vite Dev Middleware or Production Static Serving
   const isProd = process.env.NODE_ENV === 'production' && fs.existsSync(path.resolve(process.cwd(), 'dist'));
+  const distPath = path.resolve(process.cwd(), 'dist');
+  const vite = isProd
+    ? null
+    : await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+
+  // Autonomous Token Portal POST entry (renders SPA with system bootstrap payload)
+  app.post(['/obter-token', '/obter-token/'], async (req, res, next) => {
+    try {
+      const body = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, unknown>;
+      const query = (req.query && typeof req.query === 'object' ? req.query : {}) as Record<string, unknown>;
+      const pickStr = (...keys: string[]): string => {
+        for (const k of keys) {
+          const bVal = body[k];
+          if (typeof bVal === 'string' && bVal.trim()) return bVal.trim();
+          const qVal = query[k];
+          if (typeof qVal === 'string' && qVal.trim()) return qVal.trim();
+        }
+        return '';
+      };
+
+      const bootstrapPayload = {
+        system: pickStr('sistema', 'system', 'systemSlug', 'system_slug', 'clientId', 'client_id') || undefined,
+        redirectUri: pickStr('redirectUri', 'redirect_uri', 'callbackUrl') || undefined,
+        state: pickStr('state') || undefined,
+      };
+      const safeJson = JSON.stringify(bootstrapPayload)
+        .replace(/</g, '\\u003c')
+        .replace(/>/g, '\\u003e')
+        .replace(/&/g, '\\u0026');
+      const bootstrapTag = `<script id="isg-token-portal-bootstrap" type="application/json">${safeJson}</script>`;
+
+      const templatePath = isProd
+        ? path.join(distPath, 'index.html')
+        : path.resolve(process.cwd(), 'index.html');
+      let html = fs.readFileSync(templatePath, 'utf-8');
+      if (vite) {
+        html = await vite.transformIndexHtml(req.originalUrl || '/obter-token', html);
+      }
+      html = html.replace('</head>', `  ${bootstrapTag}\n  </head>`);
+      res.status(200).setHeader('Content-Type', 'text/html; charset=utf-8').send(html);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Express API Error Middleware (Captures unhandled route exceptions with full stack trace)
+  app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    const recorded = recordSystemException(err, {
+      source: 'express',
+      operationOrRoute: req.originalUrl || req.path,
+      httpMethod: req.method,
+      statusCode: 500,
+    });
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Erro interno no servidor.',
+        traceId: recorded?.trace_id,
+      });
+    }
+  });
+
   if (isProd) {
-    const distPath = path.resolve(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
-  } else {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
+  } else if (vite) {
     app.use(vite.middlewares);
   }
 
@@ -1212,7 +1579,28 @@ async function startServer() {
   });
 }
 
+process.on('unhandledRejection', (reason) => {
+  recordSystemException(reason, {
+    source: 'process:unhandledRejection',
+    operationOrRoute: 'Node.unhandledRejection',
+    statusCode: 500,
+  });
+});
+
+process.on('uncaughtException', (err) => {
+  recordSystemException(err, {
+    source: 'process:uncaughtException',
+    operationOrRoute: 'Node.uncaughtException',
+    statusCode: 500,
+  });
+});
+
 startServer().catch((err) => {
+  recordSystemException(err, {
+    source: 'bootstrap',
+    operationOrRoute: 'startServer',
+    statusCode: 500,
+  });
   console.error('Failed to start Identity Secure Gate (ISG) server:', err);
   process.exit(1);
 });

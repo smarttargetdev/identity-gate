@@ -12,6 +12,7 @@ import {
   type PermissionRow,
   type RoleRow,
   type SystemRow,
+  type SystemErrorLogRow,
   type UserRow,
 } from './db.ts';
 import {
@@ -45,9 +46,12 @@ import {
   setEdgeCached,
 } from './edgeCache.ts';
 import {
+  clearSystemErrors,
   evaluateSystemHealthTransition,
   getActiveSseCount,
+  getRecentSystemErrors,
   recordStructuredAudit,
+  recordSystemException,
   type SystemHealthEventRow,
 } from './telemetry.ts';
 import {
@@ -254,6 +258,22 @@ const schema = buildSchema(`
     createdAt: String!
   }
 
+  type SystemErrorLog {
+    id: ID!
+    traceId: String!
+    errorName: String!
+    message: String!
+    stackTrace: String!
+    source: String!
+    operationOrRoute: String!
+    httpMethod: String!
+    statusCode: Int!
+    actorMasked: String!
+    systemSlug: String
+    metadataJson: String!
+    createdAt: String!
+  }
+
   type ComplianceSummary {
     totalUsers: Int!
     anonymizedUsers: Int!
@@ -441,6 +461,7 @@ const schema = buildSchema(`
     complianceSummary: ComplianceSummary!
     exportMyDataJson: String!
     systemSettings: SystemSettings!
+    systemErrorLogs(limit: Int): [SystemErrorLog!]!
   }
 
   type Mutation {
@@ -481,6 +502,8 @@ const schema = buildSchema(`
 
     updateSystemSettings(input: SystemSettingsInput!): SystemSettings!
     resetSystemSettings: SystemSettings!
+    triggerDiagnosticException(message: String): SystemErrorLog!
+    clearSystemErrorLogs: Int!
   }
 `);
 
@@ -784,6 +807,24 @@ async function buildSystemSettingsPayload(settings: PlatformSettings, ctx: Graph
       activeSystemsCount: sysCount,
       activeUsersCount: usrCount,
     },
+  };
+}
+
+function mapSystemErrorLog(row: SystemErrorLogRow) {
+  return {
+    id: row.id,
+    traceId: row.trace_id,
+    errorName: row.error_name,
+    message: row.message,
+    stackTrace: row.stack_trace,
+    source: row.source,
+    operationOrRoute: row.operation_or_route,
+    httpMethod: row.http_method,
+    statusCode: row.status_code,
+    actorMasked: row.actor_masked,
+    systemSlug: row.system_slug,
+    metadataJson: row.metadata_json,
+    createdAt: row.created_at,
   };
 }
 
@@ -1279,6 +1320,13 @@ const rootValue = {
     return buildSystemSettingsPayload(getPlatformSettings(), ctx);
   },
 
+  systemErrorLogs: ({ limit }: { limit?: number }, ctx: GraphQLRequestContext) => {
+    requireSuperAdmin(ctx);
+    ctx.trackRead();
+    const safeLimit = Math.min(10, Math.max(1, limit ?? 10));
+    return getRecentSystemErrors(safeLimit).map(mapSystemErrorLog);
+  },
+
   // ================== MUTATIONS ==================
   createSystem: ({ input }: { input: Record<string, unknown> }, ctx: GraphQLRequestContext) => {
     const jwt = requirePermission(ctx, 'iam:systems:write');
@@ -1416,8 +1464,8 @@ const rootValue = {
 
   deleteSystem: ({ id }: { id: string }, ctx: GraphQLRequestContext) => {
     const jwt = requirePermission(ctx, 'iam:systems:write');
-    if (id === 'sys-vektor-core') {
-      throw new Error('PROTECTED_RESOURCE: O sistema principal Vektor Core nao pode ser removido.');
+    if (id === 'identity-secure-gate') {
+      throw new Error('PROTECTED_RESOURCE: O sistema principal Identity Secure Gate nao pode ser removido.');
     }
     const existing = db.prepare('SELECT * FROM systems WHERE id = ?').get(id) as SystemRow | undefined;
     if (!existing) throw new Error('NOT_FOUND: Sistema nao encontrado.');
@@ -2323,6 +2371,47 @@ const rootValue = {
 
     return buildSystemSettingsPayload(reset, ctx);
   },
+
+  triggerDiagnosticException: ({ message }: { message?: string }, ctx: GraphQLRequestContext) => {
+    const jwt = requireSuperAdmin(ctx);
+    const reason =
+      message?.trim() || 'Exceção de diagnóstico gerada manualmente pelo administrador na aba Configurações.';
+    try {
+      throw new Error(reason);
+    } catch (capturedErr) {
+      const recorded = recordSystemException(capturedErr, {
+        source: 'diagnostic',
+        operationOrRoute: 'Mutation.triggerDiagnosticException',
+        httpMethod: 'POST',
+        statusCode: 500,
+        actorEmail: jwt.email,
+        systemSlug: jwt.sys,
+        metadata: { triggeredBy: jwt.sub, diagnostic: true },
+      });
+      if (!recorded) {
+        throw new Error('Falha ao persistir exceção de diagnóstico.');
+      }
+      return mapSystemErrorLog(recorded);
+    }
+  },
+
+  clearSystemErrorLogs: (_args: unknown, ctx: GraphQLRequestContext) => {
+    const jwt = requireSuperAdmin(ctx);
+    const removed = clearSystemErrors();
+    recordStructuredAudit({
+      actorId: jwt.sub,
+      actorEmail: jwt.email,
+      systemId: jwt.systemId,
+      systemSlug: jwt.sys,
+      action: 'SYSTEM_ERROR_LOGS_CLEARED',
+      resourceType: 'system_error_logs',
+      resourceId: 'all',
+      status: 'success',
+      ip: ctx.ip,
+      details: { removedCount: removed },
+    });
+    return removed;
+  },
 };
 
 export async function graphqlHandler(req: Request, res: Response): Promise<void> {
@@ -2368,7 +2457,8 @@ export async function graphqlHandler(req: Request, res: Response): Promise<void>
     req.headers['x-bypass-cache'] === 'true' ||
     query.includes('edgeMetrics') ||
     query.includes('exportMyDataJson') ||
-    query.includes('systemSettings');
+    query.includes('systemSettings') ||
+    query.includes('systemErrorLogs');
 
   // Distributed Edge Cache Lookup for read queries (respecting JWT expiry & permission version)
   let cacheKey = '';
@@ -2434,6 +2524,23 @@ export async function graphqlHandler(req: Request, res: Response): Promise<void>
     variableValues: variables,
     operationName,
   });
+
+  if (result.errors && result.errors.length > 0) {
+    for (const gqlErr of result.errors) {
+      recordSystemException(gqlErr.originalError ?? gqlErr, {
+        source: 'graphql',
+        operationOrRoute: opLabel,
+        httpMethod: req.method,
+        statusCode: gqlErr.originalError ? 500 : 400,
+        actorEmail: jwt.email,
+        systemSlug: jwt.sys,
+        metadata: {
+          path: gqlErr.path,
+          locations: gqlErr.locations,
+        },
+      });
+    }
+  }
 
   const durationMs = performance.now() - started;
   const cacheStatus: 'HIT' | 'MISS' | 'BYPASS' =

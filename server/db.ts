@@ -113,6 +113,22 @@ export interface AuditLogRow {
   created_at: string;
 }
 
+export interface SystemErrorLogRow {
+  id: string;
+  trace_id: string;
+  error_name: string;
+  message: string;
+  stack_trace: string;
+  source: string;
+  operation_or_route: string;
+  http_method: string;
+  status_code: number;
+  actor_masked: string;
+  system_slug: string | null;
+  metadata_json: string;
+  created_at: string;
+}
+
 const dataDir = path.resolve(process.cwd(), 'data');
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -368,6 +384,22 @@ CREATE TABLE IF NOT EXISTS system_health_events (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS system_error_logs (
+  id TEXT PRIMARY KEY,
+  trace_id TEXT NOT NULL,
+  error_name TEXT NOT NULL,
+  message TEXT NOT NULL,
+  stack_trace TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'server',
+  operation_or_route TEXT NOT NULL DEFAULT '',
+  http_method TEXT NOT NULL DEFAULT '',
+  status_code INTEGER NOT NULL DEFAULT 500,
+  actor_masked TEXT NOT NULL DEFAULT 'system',
+  system_slug TEXT,
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL
+);
+
 -- Covering & Composite Indexes for Read-Heavy IAM & GraphQL Batching
 CREATE INDEX IF NOT EXISTS idx_systems_slug ON systems(slug);
 CREATE INDEX IF NOT EXISTS idx_systems_client ON systems(client_id);
@@ -383,6 +415,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_sys ON audit_logs(system_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_consent_user_sys ON consent_records(user_id, system_id);
 CREATE INDEX IF NOT EXISTS idx_health_events_created ON system_health_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_error_logs_created ON system_error_logs(created_at DESC);
 `;
 
 db.exec(D1_SCHEMA_SQL);
@@ -464,7 +497,7 @@ export function seedInitialData(): void {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  const sysCoreId = 'sys-vektor-core';
+  const sysCoreId = 'identity-secure-gate';
   const sysPayId = 'sys-edgepay-gw';
   const sysAtlasId = 'sys-atlas-bi';
 
@@ -805,18 +838,67 @@ export function seedInitialData(): void {
 }
 
 seedInitialData();
-db.prepare("UPDATE systems SET name = 'Identity Secure Gate' WHERE id = 'sys-vektor-core' AND name IN ('Vektor Core Console', 'Smarties Gate Core', 'Smarties Secure Gate Core', 'Secure Gate')").run();
-db.prepare("UPDATE systems SET slug = 'secure-gate' WHERE id = 'sys-vektor-core' AND slug = 'vektor-core'").run();
+
+// Idempotent migration: rename primary system ID from 'sys-vektor-core' to 'identity-secure-gate'
+const legacyCoreRow = db.prepare("SELECT id FROM systems WHERE id = 'sys-vektor-core'").get();
+const newCoreRow = db.prepare("SELECT id FROM systems WHERE id = 'identity-secure-gate'").get();
+if (legacyCoreRow && !newCoreRow) {
+  db.pragma('foreign_keys = OFF');
+  try {
+    db.transaction(() => {
+      db.prepare("UPDATE systems SET id = 'identity-secure-gate' WHERE id = 'sys-vektor-core'").run();
+      db.prepare("UPDATE roles SET system_id = 'identity-secure-gate' WHERE system_id = 'sys-vektor-core'").run();
+      db.prepare("UPDATE permissions SET system_id = 'identity-secure-gate' WHERE system_id = 'sys-vektor-core'").run();
+      db.prepare("UPDATE user_system_bindings SET system_id = 'identity-secure-gate' WHERE system_id = 'sys-vektor-core'").run();
+      db.prepare("UPDATE sessions SET system_id = 'identity-secure-gate' WHERE system_id = 'sys-vektor-core'").run();
+      db.prepare("UPDATE consent_records SET system_id = 'identity-secure-gate' WHERE system_id = 'sys-vektor-core'").run();
+      db.prepare("UPDATE oauth_codes SET system_id = 'identity-secure-gate' WHERE system_id = 'sys-vektor-core'").run();
+      db.prepare("UPDATE mfa_challenges SET system_id = 'identity-secure-gate' WHERE system_id = 'sys-vektor-core'").run();
+      db.prepare("UPDATE audit_logs SET system_id = 'identity-secure-gate' WHERE system_id = 'sys-vektor-core'").run();
+      db.prepare("UPDATE audit_logs SET resource_id = 'identity-secure-gate' WHERE resource_type = 'system' AND resource_id = 'sys-vektor-core'").run();
+      db.prepare("UPDATE kv_store SET kv_key = 's_ver:identity-secure-gate' WHERE kv_key = 's_ver:sys-vektor-core'").run();
+    })();
+  } finally {
+    db.pragma('foreign_keys = ON');
+  }
+}
+
+db.prepare("UPDATE systems SET name = 'Identity Secure Gate' WHERE id = 'identity-secure-gate' AND name IN ('Vektor Core Console', 'Smarties Gate Core', 'Smarties Secure Gate Core', 'Secure Gate')").run();
+db.prepare("UPDATE systems SET slug = 'secure-gate' WHERE id = 'identity-secure-gate' AND slug = 'vektor-core'").run();
 db.prepare("UPDATE systems SET slug = 'edgepay-gateway' WHERE id = 'sys-edgepay-gw' AND slug = 'edgepay-api'").run();
 db.prepare("UPDATE systems SET name = 'Atlas Analytics' WHERE id = 'sys-atlas-bi' AND name = 'Atlas Analytics Portal'").run();
 db.prepare("UPDATE systems SET slug = 'atlas-analytics' WHERE id = 'sys-atlas-bi' AND slug = 'atlas-bi'").run();
-db.prepare("UPDATE audit_logs SET system_slug = 'secure-gate' WHERE system_id = 'sys-vektor-core' AND system_slug = 'vektor-core'").run();
+db.prepare("UPDATE audit_logs SET system_slug = 'secure-gate' WHERE system_id = 'identity-secure-gate' AND system_slug = 'vektor-core'").run();
 db.prepare("UPDATE audit_logs SET system_slug = 'edgepay-gateway' WHERE system_id = 'sys-edgepay-gw' AND system_slug = 'edgepay-api'").run();
 db.prepare("UPDATE audit_logs SET system_slug = 'atlas-analytics' WHERE system_id = 'sys-atlas-bi' AND system_slug = 'atlas-bi'").run();
 db.prepare("UPDATE users SET email = 'administrator@smarttarget.com.br' WHERE id = 'usr-admin-01' AND email = 'admin@vektor.iam'").run();
 db.prepare("UPDATE users SET email = 'operator@smarttarget.com.br' WHERE id = 'usr-clara-02' AND email = 'clara.silva@vektor.iam'").run();
 db.prepare("UPDATE audit_logs SET actor_masked = 'ad***@smarttarget.com.br' WHERE actor_masked = 'ad***@vektor.iam'").run();
 db.prepare("UPDATE audit_logs SET actor_masked = 'op***@smarttarget.com.br' WHERE actor_masked = 'cl***@vektor.iam'").run();
+
+if (process.env.GITHUB_OAUTH_CLIENT_ID) {
+  db.prepare(`
+    UPDATE identity_providers
+    SET client_id = ?, simulation_mode = 0, updated_at = ?
+    WHERE id = 'idp-github' AND (client_id != ? OR simulation_mode != 0)
+  `).run(
+    process.env.GITHUB_OAUTH_CLIENT_ID,
+    new Date().toISOString(),
+    process.env.GITHUB_OAUTH_CLIENT_ID
+  );
+}
+
+if (process.env.GOOGLE_OAUTH_CLIENT_ID) {
+  db.prepare(`
+    UPDATE identity_providers
+    SET client_id = ?, simulation_mode = 0, updated_at = ?
+    WHERE id = 'idp-google' AND (client_id != ? OR simulation_mode != 0)
+  `).run(
+    process.env.GOOGLE_OAUTH_CLIENT_ID,
+    new Date().toISOString(),
+    process.env.GOOGLE_OAUTH_CLIENT_ID
+  );
+}
 
 const healthEventCount = db.prepare('SELECT COUNT(*) as cnt FROM system_health_events').get() as { cnt: number };
 if (healthEventCount.cnt === 0) {

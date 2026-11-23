@@ -290,7 +290,7 @@ export const SystemsManager: React.FC<SystemsManagerProps> = ({ token, onNotify,
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
-                        {sys.id !== 'sys-vektor-core' && (
+                        {sys.id !== 'identity-secure-gate' && (
                           <button
                             type="button"
                             onClick={() => handleDelete(sys)}

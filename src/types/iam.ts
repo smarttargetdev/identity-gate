@@ -279,3 +279,18 @@ export interface PlatformSystemSettings {
   };
 }
 
+export interface SystemErrorLog {
+  id: string;
+  traceId: string;
+  errorName: string;
+  message: string;
+  stackTrace: string;
+  source: string;
+  operationOrRoute: string;
+  httpMethod: string;
+  statusCode: number;
+  actorMasked: string;
+  systemSlug: string | null;
+  metadataJson: string;
+  createdAt: string;
+}

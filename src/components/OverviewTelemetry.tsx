@@ -190,19 +190,19 @@ const SECTION_META: Record<OverviewSection, { title: string; tooltip: string }> 
     tooltip: 'Painel sintético consolidando estatísticas-chave, tendência de 24h, HTTP, borda/SQLite, saúde, alertas e auditoria.',
   },
   'overview-stats': {
-    title: 'Estatísticas-Chave',
+    title: 'Estatísticas Gerais',
     tooltip: 'Detalhamento completo de usuários ativos, adoção de 2FA (TOTP/SMS), tokens JWT ativos e sessões por conta.',
   },
   'overview-trend': {
-    title: 'Tendência de Usuários Ativos (24h)',
+    title: 'Usuários Ativos',
     tooltip: 'Série horária das últimas 24 horas com usuários distintos, sessões ativas e eventos GraphQL/Auth registrados.',
   },
   'overview-http': {
-    title: 'Códigos HTTP por Sistema (24h)',
+    title: 'Respostas por Sistema',
     tooltip: 'Distribuição empilhada e taxas percentuais de respostas 2xx (Sucesso), 4xx (Negado) e 5xx (Erro) por sistema.',
   },
   'overview-edge': {
-    title: 'Métricas de Borda & SQLite WAL',
+    title: 'Borda e Armazenamento',
     tooltip: 'Desempenho de Edge Cache, leituras/gravações SQLite WAL, versões KV e fila assíncrona de auditoria.',
   },
   'overview-health': {
@@ -433,13 +433,13 @@ const ActiveUsersTrendChart: React.FC<ActiveUsersTrendChartProps> = ({
 
   return (
     <section
-      aria-label="Tendência de Usuários Ativos nas Últimas 24 Horas"
+      aria-label="Usuários Ativos"
       className={`bg-[#111827] border border-slate-800/90 rounded-lg ${compact ? 'p-4 space-y-2.5' : 'p-5 space-y-4'}`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
         <div className="flex items-center gap-2">
           <TrendingUp className="w-4 h-4 text-[#F6821F] shrink-0" />
-          <h2 className="text-sm font-semibold text-white">Tendência de Usuários Ativos (24h)</h2>
+          <h2 className="text-sm font-semibold text-white">Usuários Ativos</h2>
           <InfoTooltip text="Sessões ativas e acessos distintos registrados pelos resolvedores GraphQL nas últimas 24 horas." />
         </div>
         <div className="flex flex-wrap items-center gap-2.5 text-[11px] font-mono tabular-nums text-slate-400">
@@ -523,13 +523,13 @@ const HttpStatusDistributionWidget: React.FC<HttpStatusWidgetProps> = ({
 
   return (
     <section
-      aria-label="Distribuição de Códigos HTTP (2xx, 4xx, 5xx) nas Últimas 24 Horas"
+      aria-label="Respostas por Sistema"
       className={`bg-[#111827] border border-slate-800/90 rounded-lg ${compact ? 'p-4 space-y-2.5' : 'p-5 space-y-4'}`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
         <div className="flex items-center gap-2">
           <ServerCrash className="w-4 h-4 text-[#F6821F] shrink-0" />
-          <h2 className="text-sm font-semibold text-white">Códigos HTTP por Sistema (24h)</h2>
+          <h2 className="text-sm font-semibold text-white">Respostas por Sistema</h2>
           <InfoTooltip text="Distribuição de respostas 2xx (Sucesso), 4xx (Negado) e 5xx (Erro) entre todos os sistemas monitorados." />
         </div>
         <div className="flex flex-wrap items-center gap-2.5 text-[11px] font-mono tabular-nums text-slate-400">
@@ -1303,39 +1303,60 @@ export const OverviewTelemetry: React.FC<OverviewTelemetryProps> = ({
       </div>
 
       <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-        <div className="flex items-center gap-1.5 bg-[#111827] border border-slate-700/80 rounded-md px-2.5 py-1.5">
+        <div
+          title="Atualização"
+          className="relative group flex items-center gap-1.5 bg-[#111827] border border-slate-700/80 rounded-md px-2.5 py-2"
+        >
           <Timer className="w-3.5 h-3.5 text-[#F6821F] shrink-0" />
-          <label htmlFor="overview-refresh-interval" className="text-[11px] text-slate-400 whitespace-nowrap">
-            Atualização:
-          </label>
           <select
             id="overview-refresh-interval"
-            aria-label="Intervalo de atualização automática"
+            aria-label="Atualização"
+            title="Atualização"
             value={refreshIntervalMs}
             onChange={(e) => setRefreshIntervalMs(Number(e.target.value) as RefreshIntervalOption)}
             className="bg-transparent text-xs font-mono text-slate-100 focus:outline-none cursor-pointer"
           >
-            <option value={10000} className="bg-[#090D16]">10s</option>
-            <option value={30000} className="bg-[#090D16]">30s</option>
-            <option value={60000} className="bg-[#090D16]">1min</option>
+            <option value={10000} className="bg-[#090D16]">10 segundos</option>
+            <option value={30000} className="bg-[#090D16]">30 segundos</option>
+            <option value={60000} className="bg-[#090D16]">60 segundos</option>
             <option value={0} className="bg-[#090D16]">Desativado</option>
           </select>
+          <span
+            role="tooltip"
+            className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 z-40 px-2 py-1 rounded-md bg-[#090D16] border border-slate-700/90 text-[11px] font-medium text-slate-200 shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150"
+          >
+            Atualização
+          </span>
         </div>
         <button
           type="button"
           onClick={handleRefreshAll}
-          className="flex items-center gap-2 px-3 py-2 text-xs font-medium bg-[#111827] hover:bg-slate-800 border border-slate-700/80 text-slate-200 rounded-md transition-colors whitespace-nowrap"
+          aria-label="Atualizar"
+          title="Atualizar"
+          className="relative group flex items-center justify-center p-2 text-xs font-medium bg-[#111827] hover:bg-slate-800 border border-slate-700/80 text-slate-200 rounded-md transition-colors"
         >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Atualizar</span>
+          <RefreshCw className="w-4 h-4" />
+          <span
+            role="tooltip"
+            className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 z-40 px-2 py-1 rounded-md bg-[#090D16] border border-slate-700/90 text-[11px] font-medium text-slate-200 shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150"
+          >
+            Atualizar
+          </span>
         </button>
         <button
           type="button"
           onClick={handlePurgeCache}
-          className="flex items-center gap-2 px-3 py-2 text-xs font-medium bg-[#F6821F] hover:bg-[#e27316] text-slate-950 rounded-md transition-colors whitespace-nowrap"
+          aria-label="Limpar"
+          title="Limpar"
+          className="relative group flex items-center justify-center p-2 text-xs font-medium bg-[#F6821F] hover:bg-[#e27316] text-slate-950 rounded-md transition-colors"
         >
-          <Trash2 className="w-3.5 h-3.5" />
-          <span>Expurgar</span>
+          <Trash2 className="w-4 h-4" />
+          <span
+            role="tooltip"
+            className="absolute top-full right-0 mt-1.5 z-40 px-2 py-1 rounded-md bg-[#090D16] border border-slate-700/90 text-[11px] font-medium text-slate-200 shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150"
+          >
+            Limpar
+          </span>
         </button>
       </div>
     </div>
@@ -1807,12 +1828,12 @@ export const OverviewTelemetry: React.FC<OverviewTelemetryProps> = ({
     <div className="space-y-4">
       {renderHeaderControls()}
 
-      {/* 1. Estatísticas-Chave (Sintético) */}
-      <section aria-label="Estatísticas-Chave" className="bg-[#111827] border border-slate-800/90 rounded-lg p-4 space-y-3">
+      {/* 1. Estatísticas Gerais (Sintético) */}
+      <section aria-label="Estatísticas Gerais" className="bg-[#111827] border border-slate-800/90 rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-[#F6821F]" />
-            <h2 className="text-sm font-semibold text-white">Estatísticas-Chave</h2>
+            <h2 className="text-sm font-semibold text-white">Estatísticas Gerais</h2>
             <InfoTooltip text="Resumo ao vivo de usuários ativos, tokens JWT válidos e alertas recentes de segurança." />
           </div>
           {onNavigateSection && (
@@ -1888,12 +1909,12 @@ export const OverviewTelemetry: React.FC<OverviewTelemetryProps> = ({
         />
       </div>
 
-      {/* 4. Borda & SQLite WAL (Sintético) */}
-      <section aria-label="Borda e SQLite WAL" className="bg-[#111827] border border-slate-800/90 rounded-lg p-4 space-y-3">
+      {/* 4. Borda e Armazenamento (Sintético) */}
+      <section aria-label="Borda e Armazenamento" className="bg-[#111827] border border-slate-800/90 rounded-lg p-4 space-y-3">
         <div className="flex items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
           <div className="flex items-center gap-2">
             <Zap className="w-4 h-4 text-[#F6821F]" />
-            <h2 className="text-sm font-semibold text-white">Borda & SQLite WAL</h2>
+            <h2 className="text-sm font-semibold text-white">Borda e Armazenamento</h2>
             <InfoTooltip text="Indicadores condensados de Edge Cache HIT, latências GraphQL p50/p95, leitura SQLite WAL e KV/SSE." />
           </div>
           {onNavigateSection && (
@@ -2026,12 +2047,12 @@ export const OverviewTelemetry: React.FC<OverviewTelemetryProps> = ({
         />
       </div>
 
-      {/* 7. Logs de Auditoria (Sintético: últimos 5 registros) */}
-      <section aria-label="Logs de Auditoria (Resumo)" className="bg-[#111827] border border-slate-800/90 rounded-lg overflow-hidden">
+      {/* 7. Eventos de Auditoria (Sintético: últimos 5 registros) */}
+      <section aria-label="Eventos de Auditoria" className="bg-[#111827] border border-slate-800/90 rounded-lg overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-800/80 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-[#F6821F]" />
-            <h2 className="text-sm font-semibold text-white">Logs de Auditoria (Últimos Eventos)</h2>
+            <h2 className="text-sm font-semibold text-white">Eventos de Auditoria</h2>
             <InfoTooltip text="Resumo dos 5 eventos de auditoria mais recentes. Abra o submenu para filtros completos, busca e CSV." />
           </div>
           {onNavigateSection && (

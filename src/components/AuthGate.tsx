@@ -74,6 +74,16 @@ export const AuthGate: React.FC<AuthGateProps> = ({ onAuthenticated }) => {
   const userComboRef = useRef<HTMLDivElement>(null);
   const userInputRef = useRef<HTMLInputElement>(null);
   const suppressFocusOpenRef = useRef(false);
+  const selectedSlugRef = useRef(selectedSlug);
+  const onAuthenticatedRef = useRef(onAuthenticated);
+
+  useEffect(() => {
+    selectedSlugRef.current = selectedSlug;
+  }, [selectedSlug]);
+
+  useEffect(() => {
+    onAuthenticatedRef.current = onAuthenticated;
+  }, [onAuthenticated]);
 
   useEffect(() => {
     const handleClickOutside = (ev: MouseEvent) => {
@@ -121,13 +131,65 @@ export const AuthGate: React.FC<AuthGateProps> = ({ onAuthenticated }) => {
         setExecutionEnvironment('Desenvolvimento');
       });
 
-    const handlePopupMessage = (ev: MessageEvent) => {
-      if (ev.data?.type === 'VEKTOR_IDP_CALLBACK') {
+    const handlePopupMessage = async (ev: MessageEvent) => {
+      const origin = ev.origin || '';
+      if (
+        origin !== window.location.origin &&
+        !origin.endsWith('.run.app') &&
+        !origin.includes('localhost')
+      ) {
+        return;
+      }
+      if (ev.data?.type === 'VEKTOR_IDP_ERROR') {
+        setError(ev.data.error || 'Falha na autenticação externa.');
+        return;
+      }
+      if (ev.data?.type === 'VEKTOR_IDP_CALLBACK' && ev.data?.ticket) {
+        setLoading(true);
         setError(null);
+        try {
+          const res = await fetch('/api/auth/idp/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ticket: ev.data.ticket,
+              systemSlug: selectedSlugRef.current,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Falha ao concluir autenticação externa.');
+
+          if (data.requiresMfa) {
+            setMfaPending({
+              mfaToken: data.mfaToken,
+              availableMethods: data.availableMethods,
+              preferredMethod: data.preferredMethod,
+              phoneMasked: data.phoneMasked,
+              systemName: data.system?.name || selectedSlugRef.current,
+            });
+            const pref = data.preferredMethod;
+            setMfaMethod(pref === 'sms' || pref === 'totp' || pref === 'backup_code' ? pref : 'totp');
+            return;
+          }
+
+          onAuthenticatedRef.current({
+            token: data.accessToken,
+            expiresAt: data.expiresAt,
+            system: data.system,
+            user: data.user,
+          });
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Erro ao concluir autenticação externa.');
+        } finally {
+          setLoading(false);
+        }
       }
     };
-    window.addEventListener('message', handlePopupMessage);
-    return () => window.removeEventListener('message', handlePopupMessage);
+    const onMessage = (ev: MessageEvent) => {
+      void handlePopupMessage(ev);
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
   }, []);
 
   const currentSystem = systems.find((s) => s.slug === selectedSlug);
@@ -266,14 +328,22 @@ export const AuthGate: React.FC<AuthGateProps> = ({ onAuthenticated }) => {
   const handleTriggerIdp = async (idp: PublicIdpItem) => {
     setError(null);
     try {
-      const res = await fetch(`/api/auth/idp/${idp.provider_type}/url`);
+      const res = await fetch(
+        `/api/auth/idp/${idp.provider_type}/url?systemSlug=${encodeURIComponent(selectedSlug)}`
+      );
       const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao iniciar IdP externo.');
+      }
       if (data.simulation) {
         setIdpModal({ providerType: idp.provider_type, name: idp.name });
         return;
       }
       if (data.url) {
-        window.open(data.url, 'vektor_idp_oauth', 'width=560,height=680');
+        const popup = window.open(data.url, 'vektor_idp_oauth', 'width=600,height=700');
+        if (!popup) {
+          setError('O navegador bloqueou o pop-up de autenticação. Permita pop-ups para continuar.');
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao iniciar IdP externo.');
@@ -328,9 +398,11 @@ export const AuthGate: React.FC<AuthGateProps> = ({ onAuthenticated }) => {
     <div className="min-h-screen bg-[#090D16] text-slate-100 flex flex-col justify-between px-6 py-8">
       <header className="max-w-6xl w-full mx-auto flex items-center justify-between gap-8 pb-6 border-b border-slate-800/80">
         <div className="flex items-center gap-3 whitespace-nowrap shrink-0">
-          <div className="w-8 h-8 rounded-md bg-[#F6821F]/15 border border-[#F6821F]/40 flex items-center justify-center text-[#F6821F] font-mono text-xs font-bold">
-            ISG
-          </div>
+          <img
+            src="https://assets.smarttarget.com.br/company/target.svg"
+            alt={platformName}
+            className="w-8 h-8 object-contain shrink-0"
+          />
           <span className="font-display text-lg font-semibold tracking-tight text-white">
             {platformName}
           </span>
@@ -506,7 +578,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({ onAuthenticated }) => {
                     {isQuickAccount && (
                       <span className="text-[11px] text-slate-400 flex items-center gap-1">
                         <Lock className="w-3 h-3 text-slate-500" />
-                        <span>Preenchida (somente leitura)</span>
+                        <span>Preenchimento automático</span>
                       </span>
                     )}
                   </div>

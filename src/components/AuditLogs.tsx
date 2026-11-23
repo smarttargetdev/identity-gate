@@ -485,10 +485,17 @@ export const AuditLogs: React.FC<AuditLogsProps> = ({
             <button
               type="button"
               onClick={() => void loadAuditTrail(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#090D16] hover:bg-slate-800 border border-slate-700/80 text-slate-200 rounded-md transition-colors"
+              aria-label="Atualizar"
+              title="Atualizar"
+              className="relative group flex items-center justify-center p-2 text-xs font-medium bg-[#090D16] hover:bg-slate-800 border border-slate-700/80 text-slate-200 rounded-md transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span>Atualizar</span>
+              <span
+                role="tooltip"
+                className="absolute top-full right-0 mt-1.5 z-40 px-2 py-1 rounded-md bg-[#090D16] border border-slate-700/90 text-[11px] font-medium text-slate-200 shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150"
+              >
+                Atualizar
+              </span>
             </button>
           </div>
         </div>
