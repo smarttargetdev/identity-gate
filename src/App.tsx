@@ -591,24 +591,32 @@ export default function App() {
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Top Bar (Clean Breadcrumb + Last GraphQL Edge Diagnostic + Session Countdown + Sign Out) */}
-        <header className="h-14 px-6 border-b border-slate-800/80 bg-[#090D16] flex items-center justify-between gap-6 shrink-0">
-          <div className="flex items-center gap-2 text-xs text-slate-400 whitespace-nowrap truncate">
-            <span>
-              {platformName} <span className="font-mono text-[#F6821F]">(ISG)</span>
-            </span>
-            <span aria-hidden="true">/</span>
-            <span className="font-mono text-slate-300">{session.system.slug}</span>
-            {publicConfig?.executionEnvironment && (
-              <>
-                <span aria-hidden="true">/</span>
-                <span className={publicConfig.executionEnvironment === 'Produção' ? 'text-amber-400' : 'text-slate-400'}>
-                  {publicConfig.executionEnvironment}
+        <header className="min-h-14 py-1.5 px-6 border-b border-slate-800/80 bg-[#090D16] flex items-center justify-between gap-6 shrink-0">
+          {isExpandedView ? (
+            <div className="flex items-center gap-2.5 min-w-0">
+              <img
+                src="https://assets.smarttarget.com.br/company/target.svg"
+                alt={platformName}
+                className="w-7 h-7 object-contain shrink-0"
+              />
+              <div className="flex flex-col justify-center min-w-0">
+                <span className="font-display text-sm font-semibold tracking-tight text-white leading-tight whitespace-nowrap truncate">
+                  {platformName}
                 </span>
-              </>
-            )}
-            <span aria-hidden="true">/</span>
-            <span className="text-white font-medium">{activeNav?.label}</span>
-          </div>
+                <span className="text-[10px] leading-tight text-slate-400 font-medium whitespace-nowrap truncate mt-0.5">
+                  {activeNav?.label}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 min-w-0 text-xs text-slate-400 whitespace-nowrap truncate">
+              <span>
+                {platformName} <span className="font-mono text-[#F6821F]">(ISG)</span>
+              </span>
+              <span aria-hidden="true">/</span>
+              <span className="text-white font-medium">{activeNav?.label}</span>
+            </div>
+          )}
 
           <div className="flex items-center gap-3 shrink-0">
             {shortcutChordPending && (
@@ -620,23 +628,25 @@ export default function App() {
               type="button"
               onClick={() => setIsExpandedView((prev) => !prev)}
               aria-pressed={isExpandedView}
-              title={
-                isExpandedView
-                  ? 'Restaurar sidebar e alinhamento padrão'
-                  : 'Remover sidebar e centralizar área de trabalho'
-              }
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 ${
+              aria-label={isExpandedView ? 'Restaurar' : 'Expandir'}
+              title={isExpandedView ? 'Restaurar' : 'Expandir'}
+              className={`relative group flex items-center justify-center p-2 text-xs font-medium rounded-md border transition-colors shrink-0 ${
                 isExpandedView
                   ? 'bg-[#F6821F]/15 border-[#F6821F]/50 text-white'
                   : 'bg-[#111827] hover:bg-slate-800 border-slate-700/80 text-slate-200'
               }`}
             >
               {isExpandedView ? (
-                <Minimize2 className="w-3.5 h-3.5 text-[#F6821F]" />
+                <Minimize2 className="w-4 h-4 text-[#F6821F]" />
               ) : (
-                <Maximize2 className="w-3.5 h-3.5 text-slate-400" />
+                <Maximize2 className="w-4 h-4 text-slate-400" />
               )}
-              <span>{isExpandedView ? 'Restaurar' : 'Expandir'}</span>
+              <span
+                role="tooltip"
+                className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 z-40 px-2 py-1 rounded-md bg-[#090D16] border border-slate-700/90 text-[11px] font-medium text-slate-200 shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150"
+              >
+                {isExpandedView ? 'Restaurar' : 'Expandir'}
+              </span>
             </button>
 
             {lastDiag && (
@@ -712,10 +722,17 @@ export default function App() {
             <button
               type="button"
               onClick={handleLogout}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#111827] hover:bg-slate-800 border border-slate-700/80 text-slate-200 rounded-md transition-colors whitespace-nowrap shrink-0"
+              aria-label="Sair"
+              title="Sair"
+              className="relative group flex items-center justify-center p-2 text-xs font-medium bg-[#111827] hover:bg-slate-800 border border-slate-700/80 text-slate-200 rounded-md transition-colors shrink-0"
             >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Sair</span>
+              <LogOut className="w-4 h-4" />
+              <span
+                role="tooltip"
+                className="absolute top-full right-0 mt-1.5 z-40 px-2 py-1 rounded-md bg-[#090D16] border border-slate-700/90 text-[11px] font-medium text-slate-200 shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150"
+              >
+                Sair
+              </span>
             </button>
           </div>
         </header>

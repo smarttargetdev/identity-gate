@@ -1285,7 +1285,7 @@ export const OverviewTelemetry: React.FC<OverviewTelemetryProps> = ({
 
   const renderHeaderControls = () => (
     <div className="flex flex-wrap items-center justify-between gap-4">
-      <div className="flex flex-wrap items-center gap-2.5">
+      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
         {section !== 'overview' && onNavigateSection && (
           <button
             type="button"
@@ -1302,10 +1302,10 @@ export const OverviewTelemetry: React.FC<OverviewTelemetryProps> = ({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+      <div className="flex items-center gap-2.5 flex-1 min-w-[240px]">
         <div
           title="Atualização"
-          className="relative group flex items-center gap-1.5 bg-[#111827] border border-slate-700/80 rounded-md px-2.5 py-2"
+          className="relative group flex-1 min-w-0 flex items-center gap-1.5 bg-[#111827] border border-slate-700/80 rounded-md px-2.5 py-2"
         >
           <Timer className="w-3.5 h-3.5 text-[#F6821F] shrink-0" />
           <select
@@ -1314,7 +1314,7 @@ export const OverviewTelemetry: React.FC<OverviewTelemetryProps> = ({
             title="Atualização"
             value={refreshIntervalMs}
             onChange={(e) => setRefreshIntervalMs(Number(e.target.value) as RefreshIntervalOption)}
-            className="bg-transparent text-xs font-mono text-slate-100 focus:outline-none cursor-pointer"
+            className="w-full flex-1 min-w-0 bg-transparent text-xs font-mono text-slate-100 focus:outline-none cursor-pointer"
           >
             <option value={10000} className="bg-[#090D16]">10 segundos</option>
             <option value={30000} className="bg-[#090D16]">30 segundos</option>
