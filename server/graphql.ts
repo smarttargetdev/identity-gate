@@ -1333,7 +1333,8 @@ const rootValue = {
     const settings = getPlatformSettings();
     const started = performance.now();
     const id = `sys-${crypto.randomBytes(4).toString('hex')}`;
-    const clientId = `cid_${String(input.slug).replace(/[^a-z0-9_-]/gi, '_')}_${crypto.randomBytes(3).toString('hex')}`;
+    const cleanSlug = String(input.slug).trim();
+    const clientId = `cid_${cleanSlug.replace(/-/g, '_').replace(/[^a-z0-9_]/gi, '_')}`;
     const rawSecret = `csec_${crypto.randomBytes(20).toString('hex')}`;
     const now = new Date().toISOString();
 
@@ -1347,7 +1348,7 @@ const rootValue = {
     `).run(
       id,
       String(input.name),
-      String(input.slug),
+      cleanSlug,
       String(input.description || ''),
       clientId,
       sha256Hex(rawSecret),
@@ -1382,7 +1383,7 @@ const rootValue = {
     db.prepare('INSERT INTO permissions (id, system_id, code, description, created_at) VALUES (?, ?, ?, ?, ?)').run(
       defaultPermId,
       id,
-      `${String(input.slug)}:read`,
+      `${cleanSlug}:read`,
       'Acesso basico de leitura',
       now
     );
@@ -1394,14 +1395,14 @@ const rootValue = {
       actorId: jwt.sub,
       actorEmail: jwt.email,
       systemId: id,
-      systemSlug: String(input.slug),
+      systemSlug: cleanSlug,
       action: 'SYSTEM_CREATED',
       resourceType: 'system',
       resourceId: id,
       status: 'success',
       durationMs: performance.now() - started,
       ip: ctx.ip,
-      details: { slug: input.slug, signingAlg: input.signingAlg, jwtTtlSeconds: input.jwtTtlSeconds },
+      details: { slug: cleanSlug, clientId, signingAlg: input.signingAlg, jwtTtlSeconds: input.jwtTtlSeconds },
     });
 
     const row = db.prepare('SELECT * FROM systems WHERE id = ?').get(id) as SystemRow;
@@ -1414,17 +1415,20 @@ const rootValue = {
     const existing = db.prepare('SELECT * FROM systems WHERE id = ?').get(id) as SystemRow | undefined;
     if (!existing) throw new Error('NOT_FOUND: Sistema nao encontrado.');
 
+    const nextSlug = String(input.slug ?? existing.slug).trim();
+    const nextClientId = `cid_${nextSlug.replace(/-/g, '_').replace(/[^a-z0-9_]/gi, '_')}`;
     const now = new Date().toISOString();
     db.prepare(`
       UPDATE systems SET
-        name = ?, slug = ?, description = ?, redirect_uris = ?, allowed_grants = ?,
+        name = ?, slug = ?, client_id = ?, description = ?, redirect_uris = ?, allowed_grants = ?,
         allowed_idps = ?, jwt_ttl_seconds = ?, signing_alg = ?, require_mfa = ?,
         allowed_mfa_methods = ?, password_min_length = ?, edge_cache_ttl = ?,
         privacy_policy_version = ?, status = ?, updated_at = ?
       WHERE id = ?
     `).run(
       String(input.name ?? existing.name),
-      String(input.slug ?? existing.slug),
+      nextSlug,
+      nextClientId,
       String(input.description ?? existing.description),
       JSON.stringify(input.redirectUris ?? JSON.parse(existing.redirect_uris)),
       JSON.stringify(input.allowedGrants ?? JSON.parse(existing.allowed_grants)),
@@ -1448,14 +1452,14 @@ const rootValue = {
       actorId: jwt.sub,
       actorEmail: jwt.email,
       systemId: id,
-      systemSlug: String(input.slug ?? existing.slug),
+      systemSlug: nextSlug,
       action: 'SYSTEM_UPDATED',
       resourceType: 'system',
       resourceId: id,
       status: 'success',
       durationMs: performance.now() - started,
       ip: ctx.ip,
-      details: { jwtTtlSeconds: input.jwtTtlSeconds, requireMfa: input.requireMfa, edgeCacheTtl: input.edgeCacheTtl },
+      details: { clientId: nextClientId, jwtTtlSeconds: input.jwtTtlSeconds, requireMfa: input.requireMfa, edgeCacheTtl: input.edgeCacheTtl },
     });
 
     const row = db.prepare('SELECT * FROM systems WHERE id = ?').get(id) as SystemRow;

@@ -506,7 +506,7 @@ export function seedInitialData(): void {
     'Identity Secure Gate',
     'secure-gate',
     'Painel principal de governanca IAM, emissao de tokens e gestao multi-sistema.',
-    'cid_vektor_core_2026',
+    'cid_secure_gate',
     sha256('csec_vektor_core_demo_secret'),
     JSON.stringify(['https://vektor.edge.local/callback', 'http://localhost:3000/oauth/sandbox']),
     JSON.stringify(['authorization_code', 'password', 'refresh_token', 'client_credentials']),
@@ -530,7 +530,7 @@ export function seedInitialData(): void {
     'EdgePay Gateway',
     'edgepay-gateway',
     'API financeira de alta criticidade com 2FA obrigatorio e TTL de token reduzido.',
-    'cid_edgepay_gw_9001',
+    'cid_edgepay_gateway',
     sha256('csec_edgepay_gw_demo_secret'),
     JSON.stringify(['https://pay.edge.local/auth/callback']),
     JSON.stringify(['authorization_code', 'refresh_token']),
@@ -554,7 +554,7 @@ export function seedInitialData(): void {
     'Atlas Analytics',
     'atlas-analytics',
     'Portal analitico distribuido na borda com cache longo e assinatura HS256.',
-    'cid_atlas_bi_4420',
+    'cid_atlas_analytics',
     sha256('csec_atlas_bi_demo_secret'),
     JSON.stringify(['https://atlas.edge.local/oidc/callback']),
     JSON.stringify(['authorization_code', 'password']),
@@ -875,6 +875,23 @@ db.prepare("UPDATE users SET email = 'administrator@smarttarget.com.br' WHERE id
 db.prepare("UPDATE users SET email = 'operator@smarttarget.com.br' WHERE id = 'usr-clara-02' AND email = 'clara.silva@vektor.iam'").run();
 db.prepare("UPDATE audit_logs SET actor_masked = 'ad***@smarttarget.com.br' WHERE actor_masked = 'ad***@vektor.iam'").run();
 db.prepare("UPDATE audit_logs SET actor_masked = 'op***@smarttarget.com.br' WHERE actor_masked = 'cl***@vektor.iam'").run();
+
+const existingSystemsForClientId = db.prepare('SELECT id, slug, client_id FROM systems').all() as Array<{
+  id: string;
+  slug: string;
+  client_id: string;
+}>;
+for (const sys of existingSystemsForClientId) {
+  const expectedClientId = `cid_${sys.slug.trim().replace(/-/g, '_').replace(/[^a-z0-9_]/gi, '_')}`;
+  if (sys.client_id !== expectedClientId) {
+    const conflict = db
+      .prepare('SELECT id FROM systems WHERE client_id = ? AND id != ?')
+      .get(expectedClientId, sys.id);
+    if (!conflict) {
+      db.prepare('UPDATE systems SET client_id = ? WHERE id = ?').run(expectedClientId, sys.id);
+    }
+  }
+}
 
 if (process.env.GITHUB_OAUTH_CLIENT_ID) {
   db.prepare(`

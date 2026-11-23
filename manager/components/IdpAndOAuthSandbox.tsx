@@ -44,7 +44,7 @@ export const IdpAndOAuthSandbox: React.FC<IdpAndOAuthSandboxProps> = ({ token, o
   const [editingIdp, setEditingIdp] = useState<IdentityProvider | null>(null);
 
   // OAuth 2.0 + PKCE Sandbox State
-  const [sandboxClientId, setSandboxClientId] = useState('cid_vektor_core_2026');
+  const [sandboxClientId, setSandboxClientId] = useState('cid_secure_gate');
   const [sandboxEmail, setSandboxEmail] = useState('administrator@smarttarget.com.br');
   const [sandboxPassword, setSandboxPassword] = useState('Vektor@2026!');
   const [pkceVerifier, setPkceVerifier] = useState('isg_pkce_verifier_demo_99123');

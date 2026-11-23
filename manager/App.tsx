@@ -324,10 +324,6 @@ export default function App() {
 
   const isSuperAdmin = session.user.roles.includes('super_admin');
   const platformName = publicConfig?.platformName || 'Identity Secure Gate';
-  const activeOverviewSubmenu = OVERVIEW_SUBMENUS.find((s) => s.id === activeTab);
-  const activeNav = activeOverviewSubmenu
-    ? { id: activeOverviewSubmenu.id, label: `Visão Geral / ${activeOverviewSubmenu.label}` }
-    : NAV_ITEMS.find((i) => i.id === activeTab);
 
   return (
     <div className="min-h-screen bg-[#090D16] text-slate-100 flex">
@@ -590,7 +586,7 @@ export default function App() {
 
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 flex flex-col">
-        {/* Top Bar (Clean Breadcrumb + Last GraphQL Edge Diagnostic + Session Countdown + Sign Out) */}
+        {/* Top Bar (Brand + Last GraphQL Edge Diagnostic + Session Countdown + Sign Out) */}
         <header className="min-h-14 py-1.5 px-6 border-b border-slate-800/80 bg-[#090D16] flex items-center justify-between gap-6 shrink-0">
           {isExpandedView ? (
             <div className="flex items-center gap-2.5 min-w-0">
@@ -599,22 +595,15 @@ export default function App() {
                 alt={platformName}
                 className="w-7 h-7 object-contain shrink-0"
               />
-              <div className="flex flex-col justify-center min-w-0">
-                <span className="font-display text-sm font-semibold tracking-tight text-white leading-tight whitespace-nowrap truncate">
-                  {platformName}
-                </span>
-                <span className="text-[10px] leading-tight text-slate-400 font-medium whitespace-nowrap truncate mt-0.5">
-                  {activeNav?.label}
-                </span>
-              </div>
+              <span className="font-display text-sm font-semibold tracking-tight text-white leading-tight whitespace-nowrap truncate">
+                {platformName}
+              </span>
             </div>
           ) : (
             <div className="flex items-center gap-2 min-w-0 text-xs text-slate-400 whitespace-nowrap truncate">
               <span>
                 {platformName} <span className="font-mono text-[#F6821F]">(ISG)</span>
               </span>
-              <span aria-hidden="true">/</span>
-              <span className="text-white font-medium">{activeNav?.label}</span>
             </div>
           )}
 
