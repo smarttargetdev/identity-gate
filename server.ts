@@ -38,7 +38,11 @@ import {
   recordSystemException,
   sseTelemetryHandler,
 } from './server/telemetry.ts';
-import { createCloudflareBundleZip, getCloudflareBundleFiles } from './server/cloudflareExport.ts';
+import {
+  createCloudflareBundleZip,
+  getCloudflareBundleFiles,
+  getInfraBundleFilename,
+} from './server/cloudflareExport.ts';
 import { getPlatformSettings, getPublicPlatformConfig } from './server/settings.ts';
 
 const PORT = Number(process.env.PORT || 3000);
@@ -1480,13 +1484,17 @@ async function startServer() {
 
   // Cloudflare Workers + D1 + KV Deployment Bundle
   app.get('/api/cloudflare/bundle', (_req, res) => {
-    res.json({ files: getCloudflareBundleFiles() });
+    res.json({
+      files: getCloudflareBundleFiles(),
+      bundleFilename: getInfraBundleFilename(),
+    });
   });
 
   app.get('/api/cloudflare/download', async (_req, res) => {
     const zipBuffer = await createCloudflareBundleZip();
+    const filename = getInfraBundleFilename();
     res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', 'attachment; filename="isg-cloudflare-d1-bundle.zip"');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}.zip"`);
     res.send(zipBuffer);
   });
 

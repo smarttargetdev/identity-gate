@@ -278,6 +278,22 @@ export interface PlatformSystemSettings {
   normalizeIdentifiers: boolean;
   systemIdSeparator: '_' | '-';
   clientIdSeparator: '_' | '-';
+  infraWorkerName: string;
+  infraAccountId: string;
+  infraCompatibilityDate: string;
+  infraCompatibilityFlags: string;
+  infraCustomRoute: string;
+  infraWorkersDev: boolean;
+  infraWorkerJwtIssuer: string;
+  infraD1Binding: string;
+  infraD1DatabaseName: string;
+  infraD1DatabaseId: string;
+  infraKvBinding: string;
+  infraKvNamespaceId: string;
+  infraBundleFilename: string;
+  infraWranglerEnv: string;
+  infraIncludeDeployScript: boolean;
+  infraIncludeReadme: boolean;
   updatedAt: string;
   updatedBy: string;
   runtime?: {

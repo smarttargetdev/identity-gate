@@ -356,6 +356,22 @@ const schema = buildSchema(`
     normalizeIdentifiers: Boolean!
     systemIdSeparator: String!
     clientIdSeparator: String!
+    infraWorkerName: String!
+    infraAccountId: String!
+    infraCompatibilityDate: String!
+    infraCompatibilityFlags: String!
+    infraCustomRoute: String!
+    infraWorkersDev: Boolean!
+    infraWorkerJwtIssuer: String!
+    infraD1Binding: String!
+    infraD1DatabaseName: String!
+    infraD1DatabaseId: String!
+    infraKvBinding: String!
+    infraKvNamespaceId: String!
+    infraBundleFilename: String!
+    infraWranglerEnv: String!
+    infraIncludeDeployScript: Boolean!
+    infraIncludeReadme: Boolean!
     updatedAt: String!
     updatedBy: String!
     runtime: RuntimeSettingsInfo!
@@ -394,6 +410,22 @@ const schema = buildSchema(`
     normalizeIdentifiers: Boolean
     systemIdSeparator: String
     clientIdSeparator: String
+    infraWorkerName: String
+    infraAccountId: String
+    infraCompatibilityDate: String
+    infraCompatibilityFlags: String
+    infraCustomRoute: String
+    infraWorkersDev: Boolean
+    infraWorkerJwtIssuer: String
+    infraD1Binding: String
+    infraD1DatabaseName: String
+    infraD1DatabaseId: String
+    infraKvBinding: String
+    infraKvNamespaceId: String
+    infraBundleFilename: String
+    infraWranglerEnv: String
+    infraIncludeDeployScript: Boolean
+    infraIncludeReadme: Boolean
   }
 
   input SystemInput {

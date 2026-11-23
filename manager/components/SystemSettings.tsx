@@ -2,7 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Bug,
+  Code2,
   Database,
+  FileCode2,
+  Globe,
   KeyRound,
   Layers,
   Lock,
@@ -11,6 +14,7 @@ import {
   Server,
   ShieldAlert,
   ShieldCheck,
+  Terminal,
   Volume2,
   VolumeX,
   X,
@@ -28,7 +32,7 @@ interface SystemSettingsProps {
   onSettingsUpdated?: (settings: PlatformSystemSettings) => void;
 }
 
-type SettingsTab = 'environment' | 'jwt' | 'security' | 'edge' | 'compliance' | 'errors';
+type SettingsTab = 'environment' | 'infra' | 'jwt' | 'security' | 'edge' | 'compliance' | 'errors';
 
 const SYSTEM_SETTINGS_QUERY = `
   query AdminSystemSettings {
@@ -65,6 +69,22 @@ const SYSTEM_SETTINGS_QUERY = `
       normalizeIdentifiers
       systemIdSeparator
       clientIdSeparator
+      infraWorkerName
+      infraAccountId
+      infraCompatibilityDate
+      infraCompatibilityFlags
+      infraCustomRoute
+      infraWorkersDev
+      infraWorkerJwtIssuer
+      infraD1Binding
+      infraD1DatabaseName
+      infraD1DatabaseId
+      infraKvBinding
+      infraKvNamespaceId
+      infraBundleFilename
+      infraWranglerEnv
+      infraIncludeDeployScript
+      infraIncludeReadme
       updatedAt
       updatedBy
       runtime {
@@ -113,6 +133,22 @@ const UPDATE_SETTINGS_MUTATION = `
       normalizeIdentifiers
       systemIdSeparator
       clientIdSeparator
+      infraWorkerName
+      infraAccountId
+      infraCompatibilityDate
+      infraCompatibilityFlags
+      infraCustomRoute
+      infraWorkersDev
+      infraWorkerJwtIssuer
+      infraD1Binding
+      infraD1DatabaseName
+      infraD1DatabaseId
+      infraKvBinding
+      infraKvNamespaceId
+      infraBundleFilename
+      infraWranglerEnv
+      infraIncludeDeployScript
+      infraIncludeReadme
       updatedAt
       updatedBy
       runtime {
@@ -161,6 +197,22 @@ const RESET_SETTINGS_MUTATION = `
       normalizeIdentifiers
       systemIdSeparator
       clientIdSeparator
+      infraWorkerName
+      infraAccountId
+      infraCompatibilityDate
+      infraCompatibilityFlags
+      infraCustomRoute
+      infraWorkersDev
+      infraWorkerJwtIssuer
+      infraD1Binding
+      infraD1DatabaseName
+      infraD1DatabaseId
+      infraKvBinding
+      infraKvNamespaceId
+      infraBundleFilename
+      infraWranglerEnv
+      infraIncludeDeployScript
+      infraIncludeReadme
       updatedAt
       updatedBy
       runtime {
@@ -197,7 +249,8 @@ const TABS: Array<{
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { id: 'environment', label: 'Ambiente & Geral', icon: Server },
+  { id: 'environment', label: 'Ambientes', icon: Server },
+  { id: 'infra', label: 'Infraestrutura', icon: Code2 },
   { id: 'jwt', label: 'JWT & OAuth 2.0', icon: KeyRound },
   { id: 'security', label: 'Segurança & 2FA', icon: Lock },
   { id: 'edge', label: 'Edge Cache & Auditoria', icon: Database },
@@ -281,6 +334,22 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
       'normalizeIdentifiers',
       'systemIdSeparator',
       'clientIdSeparator',
+      'infraWorkerName',
+      'infraAccountId',
+      'infraCompatibilityDate',
+      'infraCompatibilityFlags',
+      'infraCustomRoute',
+      'infraWorkersDev',
+      'infraWorkerJwtIssuer',
+      'infraD1Binding',
+      'infraD1DatabaseName',
+      'infraD1DatabaseId',
+      'infraKvBinding',
+      'infraKvNamespaceId',
+      'infraBundleFilename',
+      'infraWranglerEnv',
+      'infraIncludeDeployScript',
+      'infraIncludeReadme',
     ];
     return keys.some((k) => saved[k] !== draft[k]);
   }, [saved, draft]);
@@ -342,6 +411,22 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             normalizeIdentifiers: draft.normalizeIdentifiers,
             systemIdSeparator: draft.systemIdSeparator,
             clientIdSeparator: draft.clientIdSeparator,
+            infraWorkerName: draft.infraWorkerName,
+            infraAccountId: draft.infraAccountId,
+            infraCompatibilityDate: draft.infraCompatibilityDate,
+            infraCompatibilityFlags: draft.infraCompatibilityFlags,
+            infraCustomRoute: draft.infraCustomRoute,
+            infraWorkersDev: draft.infraWorkersDev,
+            infraWorkerJwtIssuer: draft.infraWorkerJwtIssuer,
+            infraD1Binding: draft.infraD1Binding,
+            infraD1DatabaseName: draft.infraD1DatabaseName,
+            infraD1DatabaseId: draft.infraD1DatabaseId,
+            infraKvBinding: draft.infraKvBinding,
+            infraKvNamespaceId: draft.infraKvNamespaceId,
+            infraBundleFilename: draft.infraBundleFilename,
+            infraWranglerEnv: draft.infraWranglerEnv,
+            infraIncludeDeployScript: draft.infraIncludeDeployScript,
+            infraIncludeReadme: draft.infraIncludeReadme,
           },
         },
       });
@@ -413,19 +498,33 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             type="button"
             onClick={() => setConfirmResetModal(true)}
             disabled={loading || saving}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs text-slate-200 hover:text-white bg-[#111827] border border-slate-700/80 rounded-md whitespace-nowrap"
+            aria-label="Restaurar"
+            title="Restaurar"
+            className="relative group flex items-center justify-center p-2 text-xs text-slate-200 hover:text-white bg-[#111827] border border-slate-700/80 rounded-md transition-colors disabled:opacity-50 shrink-0"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Restaurar Padrões</span>
+            <RotateCcw className="w-4 h-4" />
+            <span
+              role="tooltip"
+              className="absolute top-full right-0 mt-1.5 z-40 px-2 py-1 rounded-md bg-[#090D16] border border-slate-700/90 text-[11px] font-medium text-slate-200 shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150"
+            >
+              Restaurar
+            </span>
           </button>
           <button
             type="submit"
             form="system-settings-form"
             disabled={loading || saving || !draft}
-            className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-[#F6821F] hover:bg-[#e27316] disabled:opacity-50 text-slate-950 rounded-md whitespace-nowrap"
+            aria-label="Salvar"
+            title="Salvar"
+            className="relative group flex items-center justify-center p-2 text-xs font-semibold bg-[#F6821F] hover:bg-[#e27316] disabled:opacity-50 text-slate-950 rounded-md transition-colors shrink-0"
           >
-            <Save className="w-3.5 h-3.5" />
-            <span>{saving ? 'Salvando...' : 'Salvar Configurações'}</span>
+            <Save className={`w-4 h-4 ${saving ? 'animate-pulse' : ''}`} />
+            <span
+              role="tooltip"
+              className="absolute top-full right-0 mt-1.5 z-40 px-2 py-1 rounded-md bg-[#090D16] border border-slate-700/90 text-[11px] font-medium text-slate-200 shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150"
+            >
+              Salvar
+            </span>
           </button>
         </div>
       </div>
@@ -515,19 +614,18 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
           aria-labelledby={activeTabMeta ? `settings-tab-${activeTabMeta.id}` : undefined}
           className={activeTab === 'errors' ? 'hidden' : 'space-y-6'}
         >
-          {/* 1. Ambiente de Execução & Plataforma */}
+          {/* 1. Ambientes de Execução & Identidade da Plataforma */}
           {activeTab === 'environment' && (
-            <section className="bg-[#111827] border border-slate-800/90 rounded-lg p-6 space-y-5">
-              <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
-                <Server className="w-4 h-4 text-[#F6821F]" />
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-semibold text-white">Ambiente de Execução e Identidade da Plataforma</h2>
-                  <InfoTooltip text="Define o comportamento da tela de autenticação, exposição de contas de demonstração e emissor OIDC." />
+            <>
+              <section className="bg-[#111827] border border-slate-800/90 rounded-lg p-6 space-y-5">
+                <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                  <Server className="w-4 h-4 text-[#F6821F]" />
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-white">Ambientes de Execução</h2>
+                    <InfoTooltip text="Define o comportamento da tela de autenticação, exposição de contas de demonstração e bloqueio de atalhos de teste." />
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                <label className="block text-xs font-medium text-slate-300">Ambiente de Execução</label>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   {ENVIRONMENTS.map((envOpt) => {
                     const selected = draft.executionEnvironment === envOpt.value;
@@ -548,43 +646,53 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     );
                   })}
                 </div>
-              </div>
+              </section>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Nome da Plataforma</label>
-                  <input
-                    type="text"
-                    required
-                    value={draft.platformName}
-                    onChange={(e) => setDraft({ ...draft, platformName: e.target.value })}
-                    className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs text-white"
-                  />
+              <section className="bg-[#111827] border border-slate-800/90 rounded-lg p-6 space-y-5">
+                <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                  <Globe className="w-4 h-4 text-[#F6821F]" />
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-white">Identidade da Plataforma</h2>
+                    <InfoTooltip text="Define o nome exibido da plataforma, o emissor OIDC/JWT (iss) e a URL base para callbacks OAuth 2.0." />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Emissor JWT (iss)</label>
-                  <input
-                    type="text"
-                    required
-                    value={draft.jwtIssuer}
-                    onChange={(e) => setDraft({ ...draft, jwtIssuer: e.target.value })}
-                    className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
-                  />
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Nome da Plataforma</label>
+                    <input
+                      type="text"
+                      required
+                      value={draft.platformName}
+                      onChange={(e) => setDraft({ ...draft, platformName: e.target.value })}
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Emissor JWT (iss)</label>
+                    <input
+                      type="text"
+                      required
+                      value={draft.jwtIssuer}
+                      onChange={(e) => setDraft({ ...draft, jwtIssuer: e.target.value })}
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      URL Base da Aplicação (Callbacks OAuth)
+                    </label>
+                    <input
+                      type="text"
+                      value={draft.appBaseUrl}
+                      onChange={(e) => setDraft({ ...draft, appBaseUrl: e.target.value })}
+                      placeholder="Auto-detectar via Host / Proxy"
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                    URL Base da Aplicação (Callbacks OAuth)
-                  </label>
-                  <input
-                    type="text"
-                    value={draft.appBaseUrl}
-                    onChange={(e) => setDraft({ ...draft, appBaseUrl: e.target.value })}
-                    placeholder="Auto-detectar via Host / Proxy"
-                    className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
-                  />
-                </div>
-              </div>
-            </section>
+              </section>
+            </>
           )}
 
           {/* 1b. Prefixos e Normalização de Identificadores de Sistemas */}
@@ -593,18 +701,18 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
                 <Layers className="w-4 h-4 text-[#F6821F]" />
                 <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-semibold text-white">Prefixos e Normalização de Sistemas</h2>
-                  <InfoTooltip text="Define os prefixos padrão para o ID do sistema e do cliente, se os valores devem ser normalizados e o caracter separador (- ou _)." />
+                  <h2 className="text-sm font-semibold text-white">Prefixos e Normalização</h2>
+                  <InfoTooltip text="Define os prefixos padrão para o sistema e o cliente, se os valores devem ser normalizados e o caracter separador (- ou _)." />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="bg-[#090D16]/60 border border-slate-800/80 rounded-md p-4 space-y-3">
-                  <div className="text-xs font-semibold text-white">ID do Sistema</div>
+                  <div className="text-xs font-semibold text-white">Sistema</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                        Prefixo do ID do Sistema
+                        Prefixo
                       </label>
                       <input
                         type="text"
@@ -622,7 +730,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                        Caracter de Normalização
+                        Normalização
                       </label>
                       <select
                         value={draft.systemIdSeparator}
@@ -646,7 +754,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                        Prefixo do Cliente
+                        Prefixo
                       </label>
                       <input
                         type="text"
@@ -664,7 +772,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                        Caracter de Normalização
+                        Normalização
                       </label>
                       <select
                         value={draft.clientIdSeparator}
@@ -716,6 +824,302 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 </div>
               </div>
             </section>
+          )}
+
+          {/* 1c. Scripts de Implementação de Infraestrutura */}
+          {activeTab === 'infra' && (
+            <>
+              <section className="bg-[#111827] border border-slate-800/90 rounded-lg p-6 space-y-5">
+                <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                  <Terminal className="w-4 h-4 text-[#F6821F]" />
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-white">Cloudflare Worker & Wrangler (wrangler.toml)</h2>
+                    <InfoTooltip text="Parâmetros usados para gerar o manifesto wrangler.toml e o código do Edge Worker na página Infraestrutura." />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Nome do Worker</label>
+                    <input
+                      type="text"
+                      required
+                      value={draft.infraWorkerName}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          infraWorkerName: e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''),
+                        })
+                      }
+                      placeholder="isg-edge-worker"
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Cloudflare Account ID (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={draft.infraAccountId}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          infraAccountId: e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''),
+                        })
+                      }
+                      placeholder="32 caracteres hexadecimais"
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Data de Compatibilidade</label>
+                    <input
+                      type="date"
+                      required
+                      value={draft.infraCompatibilityDate}
+                      onChange={(e) => setDraft({ ...draft, infraCompatibilityDate: e.target.value })}
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Flags de Compatibilidade</label>
+                    <input
+                      type="text"
+                      required
+                      value={draft.infraCompatibilityFlags}
+                      onChange={(e) => setDraft({ ...draft, infraCompatibilityFlags: e.target.value })}
+                      placeholder="nodejs_compat"
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Emissor JWT do Worker (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={draft.infraWorkerJwtIssuer}
+                      onChange={(e) => setDraft({ ...draft, infraWorkerJwtIssuer: e.target.value })}
+                      placeholder={`Padrão global (${draft.jwtIssuer})`}
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Rota / Domínio Customizado (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={draft.infraCustomRoute}
+                      onChange={(e) => setDraft({ ...draft, infraCustomRoute: e.target.value })}
+                      placeholder="iam.sua-empresa.com"
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-800/80">
+                  <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={draft.infraWorkersDev}
+                      onChange={(e) => setDraft({ ...draft, infraWorkersDev: e.target.checked })}
+                      className="rounded border-slate-700 bg-[#090D16]"
+                    />
+                    <span>Habilitar subdomínio *.workers.dev (workers_dev = true)</span>
+                  </label>
+                </div>
+              </section>
+
+              <section className="bg-[#111827] border border-slate-800/90 rounded-lg p-6 space-y-5">
+                <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                  <Database className="w-4 h-4 text-[#F6821F]" />
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-white">Banco de Dados D1 & Workers KV</h2>
+                    <InfoTooltip text="Bindings, nomes e identificadores dos recursos D1 e KV injetados nos scripts wrangler.toml, worker.ts e deploy.sh." />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="bg-[#090D16]/60 border border-slate-800/80 rounded-md p-4 space-y-3">
+                    <div className="text-xs font-semibold text-white">Cloudflare D1 (SQLite na Borda)</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-300 mb-1.5">Binding</label>
+                        <input
+                          type="text"
+                          required
+                          value={draft.infraD1Binding}
+                          onChange={(e) =>
+                            setDraft({
+                              ...draft,
+                              infraD1Binding: e.target.value.replace(/[^a-zA-Z0-9_]/g, ''),
+                            })
+                          }
+                          placeholder="DB"
+                          className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-300 mb-1.5">Nome do Banco</label>
+                        <input
+                          type="text"
+                          required
+                          value={draft.infraD1DatabaseName}
+                          onChange={(e) =>
+                            setDraft({
+                              ...draft,
+                              infraD1DatabaseName: e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''),
+                            })
+                          }
+                          placeholder="isg-d1"
+                          className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300 mb-1.5">Database ID</label>
+                      <input
+                        type="text"
+                        required
+                        value={draft.infraD1DatabaseId}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            infraD1DatabaseId: e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''),
+                          })
+                        }
+                        placeholder="00000000-0000-0000-0000-000000000000"
+                        className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-[#090D16]/60 border border-slate-800/80 rounded-md p-4 space-y-3">
+                    <div className="text-xs font-semibold text-white">Cloudflare Workers KV</div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300 mb-1.5">Binding</label>
+                      <input
+                        type="text"
+                        required
+                        value={draft.infraKvBinding}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            infraKvBinding: e.target.value.replace(/[^a-zA-Z0-9_]/g, ''),
+                          })
+                        }
+                        placeholder="IAM_KV"
+                        className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-300 mb-1.5">Namespace ID</label>
+                      <input
+                        type="text"
+                        required
+                        value={draft.infraKvNamespaceId}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            infraKvNamespaceId: e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''),
+                          })
+                        }
+                        placeholder="00000000000000000000000000000000"
+                        className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="bg-[#111827] border border-slate-800/90 rounded-lg p-6 space-y-5">
+                <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                  <FileCode2 className="w-4 h-4 text-[#F6821F]" />
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-white">Pacote de Deploy & Scripts Automatizados</h2>
+                    <InfoTooltip text="Controla o nome do pacote .zip exportado e os scripts auxiliares incluídos na geração da infraestrutura." />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Nome do Pacote (.zip)
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={draft.infraBundleFilename}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          infraBundleFilename: e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''),
+                        })
+                      }
+                      placeholder="isg-cloudflare-d1-bundle"
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Ambiente Wrangler (--env, Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={draft.infraWranglerEnv}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          infraWranglerEnv: e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''),
+                        })
+                      }
+                      placeholder="production"
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
+                  <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={draft.infraIncludeDeployScript}
+                      onChange={(e) => setDraft({ ...draft, infraIncludeDeployScript: e.target.checked })}
+                      className="rounded border-slate-700 bg-[#090D16]"
+                    />
+                    <span>Incluir script shell automatizado (deploy.sh)</span>
+                  </label>
+                  <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={draft.infraIncludeReadme}
+                      onChange={(e) => setDraft({ ...draft, infraIncludeReadme: e.target.checked })}
+                      className="rounded border-slate-700 bg-[#090D16]"
+                    />
+                    <span>Incluir guia de provisionamento (README.md)</span>
+                  </label>
+                </div>
+
+                <div className="bg-[#090D16] border border-slate-800 rounded-md p-4 space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+                    <span>Prévia dos parâmetros em wrangler.toml & CLI</span>
+                    <span>
+                      Arquivo: <strong className="text-slate-200">{draft.infraBundleFilename || 'isg-cloudflare-d1-bundle'}.zip</strong>
+                    </span>
+                  </div>
+                  <pre className="text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed">
+{`name = "${draft.infraWorkerName || 'isg-edge-worker'}"
+compatibility_date = "${draft.infraCompatibilityDate || '2026-03-01'}"
+${draft.infraAccountId ? `account_id = "${draft.infraAccountId}"\n` : ''}[[d1_databases]] -> binding="${draft.infraD1Binding || 'DB'}", database_name="${draft.infraD1DatabaseName || 'isg-d1'}"
+[[kv_namespaces]] -> binding="${draft.infraKvBinding || 'IAM_KV'}", id="${draft.infraKvNamespaceId || '00000000000000000000000000000000'}"
+[vars] -> IAM_JWT_ISSUER="${draft.infraWorkerJwtIssuer || draft.jwtIssuer}" · DEFAULT_EDGE_CACHE_TTL="${draft.defaultEdgeCacheTtl}"
+$ npx wrangler d1 execute ${draft.infraD1DatabaseName || 'isg-d1'} --remote --file=./schema.d1.sql${draft.infraWranglerEnv ? ` --env ${draft.infraWranglerEnv}` : ''} && npx wrangler deploy${draft.infraWranglerEnv ? ` --env ${draft.infraWranglerEnv}` : ''}`}
+                  </pre>
+                </div>
+              </section>
+            </>
           )}
 
           {/* 2. Tokens JWT & OAuth 2.0 */}

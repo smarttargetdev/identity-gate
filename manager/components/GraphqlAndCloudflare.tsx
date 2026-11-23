@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Play, Download, Code2, Zap } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Play, Download, Code2, Zap, RefreshCw } from 'lucide-react';
 import { gqlRequest } from '../lib/graphqlClient';
 import { InfoTooltip } from './InfoTooltip';
 import type { DiagnosticHeaders } from '../types/iam';
@@ -72,16 +72,25 @@ export const GraphqlAndCloudflare: React.FC<GraphqlAndCloudflareProps> = ({ toke
   const [resultText, setResultText] = useState('');
   const [lastDiag, setLastDiag] = useState<DiagnosticHeaders | null>(null);
   const [cfFiles, setCfFiles] = useState<CloudflareFile[]>([]);
+  const [bundleFilename, setBundleFilename] = useState('isg-cloudflare-d1-bundle');
   const [activeFilePath, setActiveFilePath] = useState('src/worker.ts');
 
-  useEffect(() => {
-    fetch('/api/cloudflare/bundle')
-      .then((r) => r.json())
-      .then((data) => {
-        setCfFiles(data.files || []);
-      })
-      .catch(() => {});
+  const fetchBundle = useCallback(async () => {
+    try {
+      const res = await fetch('/api/cloudflare/bundle', { cache: 'no-store' });
+      const data = await res.json();
+      setCfFiles(data.files || []);
+      if (data.bundleFilename) {
+        setBundleFilename(data.bundleFilename);
+      }
+    } catch {
+      // ignore network error
+    }
   }, []);
+
+  useEffect(() => {
+    void fetchBundle();
+  }, [fetchBundle]);
 
   const executeQuery = async (bypassCache = false) => {
     try {
@@ -176,17 +185,32 @@ export const GraphqlAndCloudflare: React.FC<GraphqlAndCloudflareProps> = ({ toke
             <Code2 className="w-4 h-4 text-[#F6821F]" />
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-semibold text-white">Pacote Pronto Cloudflare Workers + D1 + Workers KV</h2>
-              <InfoTooltip text="Manifesto Wrangler, migração D1 com índices de cobertura e Worker com Cache API limitada ao exp do JWT." />
+              <InfoTooltip text="Manifesto Wrangler, migração D1 com índices de cobertura e Worker com Cache API limitada ao exp do JWT. Parametrizado em Configurações > Infraestrutura." />
             </div>
           </div>
-          <a
-            href="/api/cloudflare/download"
-            onClick={() => onNotify('Download do pacote Cloudflare Workers + D1 (.zip) iniciado.')}
-            className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold bg-[#F6821F] hover:bg-[#e27316] text-slate-950 rounded-md whitespace-nowrap"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Baixar Pacote .ZIP</span>
-          </a>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                void fetchBundle();
+                onNotify('Scripts de infraestrutura atualizados com os parâmetros atuais.');
+              }}
+              aria-label="Atualizar scripts"
+              title="Atualizar scripts"
+              className="p-2 text-xs text-slate-300 hover:text-white bg-[#090D16] border border-slate-700/80 rounded-md transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+            <a
+              href="/api/cloudflare/download"
+              download={`${bundleFilename}.zip`}
+              onClick={() => onNotify(`Download do pacote ${bundleFilename}.zip iniciado.`)}
+              className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold bg-[#F6821F] hover:bg-[#e27316] text-slate-950 rounded-md whitespace-nowrap"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Baixar Pacote .ZIP</span>
+            </a>
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-2">

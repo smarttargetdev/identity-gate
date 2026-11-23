@@ -35,6 +35,22 @@ export interface PlatformSettings {
   normalizeIdentifiers: boolean;
   systemIdSeparator: '_' | '-';
   clientIdSeparator: '_' | '-';
+  infraWorkerName: string;
+  infraAccountId: string;
+  infraCompatibilityDate: string;
+  infraCompatibilityFlags: string;
+  infraCustomRoute: string;
+  infraWorkersDev: boolean;
+  infraWorkerJwtIssuer: string;
+  infraD1Binding: string;
+  infraD1DatabaseName: string;
+  infraD1DatabaseId: string;
+  infraKvBinding: string;
+  infraKvNamespaceId: string;
+  infraBundleFilename: string;
+  infraWranglerEnv: string;
+  infraIncludeDeployScript: boolean;
+  infraIncludeReadme: boolean;
   updatedAt: string;
   updatedBy: string;
 }
@@ -72,6 +88,22 @@ const DEFAULT_SETTINGS: PlatformSettings = {
   normalizeIdentifiers: true,
   systemIdSeparator: '_',
   clientIdSeparator: '_',
+  infraWorkerName: 'isg-edge-worker',
+  infraAccountId: '',
+  infraCompatibilityDate: '2026-03-01',
+  infraCompatibilityFlags: 'nodejs_compat',
+  infraCustomRoute: '',
+  infraWorkersDev: true,
+  infraWorkerJwtIssuer: '',
+  infraD1Binding: 'DB',
+  infraD1DatabaseName: 'isg-d1',
+  infraD1DatabaseId: '00000000-0000-0000-0000-000000000000',
+  infraKvBinding: 'IAM_KV',
+  infraKvNamespaceId: '00000000-0000-0000-0000-000000000000',
+  infraBundleFilename: 'isg-cloudflare-d1-bundle',
+  infraWranglerEnv: '',
+  infraIncludeDeployScript: true,
+  infraIncludeReadme: true,
   updatedAt: new Date().toISOString(),
   updatedBy: 'system',
 };
@@ -89,6 +121,28 @@ function clampInt(val: unknown, fallback: number, min: number, max: number): num
   const num = Number(val);
   if (!Number.isFinite(num)) return fallback;
   return Math.max(min, Math.min(max, Math.round(num)));
+}
+
+function sanitizeSlugToken(val: unknown, fallback: string, allowEmpty = false): string {
+  const cleaned = String(val ?? '')
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!cleaned) return allowEmpty ? '' : fallback;
+  return cleaned;
+}
+
+function sanitizeBindingName(val: unknown, fallback: string): string {
+  const cleaned = String(val ?? '')
+    .trim()
+    .replace(/[^a-zA-Z0-9_]/g, '');
+  if (!cleaned || !/^[a-zA-Z_]/.test(cleaned)) return fallback;
+  return cleaned;
+}
+
+function sanitizePlainValue(val: unknown): string {
+  return String(val ?? '')
+    .trim()
+    .replace(/["'`\r\n\\$]/g, '');
 }
 
 function normalizeSettings(raw: Partial<PlatformSettings>, updatedBy = 'system'): PlatformSettings {
@@ -135,6 +189,50 @@ function normalizeSettings(raw: Partial<PlatformSettings>, updatedBy = 'system')
       (raw.systemIdSeparator ?? (raw as Record<string, unknown>).identifierSeparator) === '-' ? '-' : '_',
     clientIdSeparator:
       (raw.clientIdSeparator ?? (raw as Record<string, unknown>).identifierSeparator) === '-' ? '-' : '_',
+    infraWorkerName: sanitizeSlugToken(
+      raw.infraWorkerName ?? DEFAULT_SETTINGS.infraWorkerName,
+      DEFAULT_SETTINGS.infraWorkerName
+    ),
+    infraAccountId: sanitizeSlugToken(raw.infraAccountId ?? DEFAULT_SETTINGS.infraAccountId, '', true),
+    infraCompatibilityDate: /^\d{4}-\d{2}-\d{2}$/.test(String(raw.infraCompatibilityDate ?? '').trim())
+      ? String(raw.infraCompatibilityDate).trim()
+      : DEFAULT_SETTINGS.infraCompatibilityDate,
+    infraCompatibilityFlags:
+      String(raw.infraCompatibilityFlags ?? DEFAULT_SETTINGS.infraCompatibilityFlags)
+        .split(',')
+        .map((f) => f.trim().replace(/[^a-zA-Z0-9_-]/g, ''))
+        .filter(Boolean)
+        .join(', ') || DEFAULT_SETTINGS.infraCompatibilityFlags,
+    infraCustomRoute: sanitizePlainValue(raw.infraCustomRoute ?? DEFAULT_SETTINGS.infraCustomRoute),
+    infraWorkersDev: Boolean(raw.infraWorkersDev ?? DEFAULT_SETTINGS.infraWorkersDev),
+    infraWorkerJwtIssuer: sanitizePlainValue(raw.infraWorkerJwtIssuer ?? DEFAULT_SETTINGS.infraWorkerJwtIssuer),
+    infraD1Binding: sanitizeBindingName(
+      raw.infraD1Binding ?? DEFAULT_SETTINGS.infraD1Binding,
+      DEFAULT_SETTINGS.infraD1Binding
+    ),
+    infraD1DatabaseName: sanitizeSlugToken(
+      raw.infraD1DatabaseName ?? DEFAULT_SETTINGS.infraD1DatabaseName,
+      DEFAULT_SETTINGS.infraD1DatabaseName
+    ),
+    infraD1DatabaseId: sanitizeSlugToken(
+      raw.infraD1DatabaseId ?? DEFAULT_SETTINGS.infraD1DatabaseId,
+      DEFAULT_SETTINGS.infraD1DatabaseId
+    ),
+    infraKvBinding: sanitizeBindingName(
+      raw.infraKvBinding ?? DEFAULT_SETTINGS.infraKvBinding,
+      DEFAULT_SETTINGS.infraKvBinding
+    ),
+    infraKvNamespaceId: sanitizeSlugToken(
+      raw.infraKvNamespaceId ?? DEFAULT_SETTINGS.infraKvNamespaceId,
+      DEFAULT_SETTINGS.infraKvNamespaceId
+    ),
+    infraBundleFilename: sanitizeSlugToken(
+      raw.infraBundleFilename ?? DEFAULT_SETTINGS.infraBundleFilename,
+      DEFAULT_SETTINGS.infraBundleFilename
+    ),
+    infraWranglerEnv: sanitizeSlugToken(raw.infraWranglerEnv ?? DEFAULT_SETTINGS.infraWranglerEnv, '', true),
+    infraIncludeDeployScript: Boolean(raw.infraIncludeDeployScript ?? DEFAULT_SETTINGS.infraIncludeDeployScript),
+    infraIncludeReadme: Boolean(raw.infraIncludeReadme ?? DEFAULT_SETTINGS.infraIncludeReadme),
     updatedAt: raw.updatedAt || new Date().toISOString(),
     updatedBy: raw.updatedBy || updatedBy,
   };
