@@ -23,6 +23,7 @@ interface PublicSystemItem {
   jwtTtlSeconds: number;
   signingAlg: string;
   requireMfa: boolean;
+  allowedMfaMethods: string[];
   allowedIdps: string[];
   edgeCacheTtl: number;
 }
@@ -61,10 +62,12 @@ const QUICK_ACCOUNTS = [
   },
 ] as const;
 
+const LOGIN_SYSTEM_SLUG = 'identity-gate';
+
 export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
   const [systems, setSystems] = useState<PublicSystemItem[]>([]);
   const [idps, setIdps] = useState<PublicIdpItem[]>([]);
-  const [selectedSlug, setSelectedSlug] = useState('secure-gate');
+  const selectedSlug = LOGIN_SYSTEM_SLUG;
   const [platformName, setPlatformName] = useState('Identity Secure Gate');
   const [executionEnvironment, setExecutionEnvironment] = useState<ExecutionEnvironment | null>(null);
 
@@ -117,11 +120,6 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
       }) => {
         const loadedSystems = data.systems || [];
         setSystems(loadedSystems);
-        if (loadedSystems.length > 0) {
-          setSelectedSlug((curr) =>
-            loadedSystems.some((s) => s.slug === curr) ? curr : loadedSystems[0].slug
-          );
-        }
         setIdps(data.identityProviders || []);
         const cfg = data.platformConfig;
         const env: ExecutionEnvironment = cfg?.executionEnvironment || 'Desenvolvimento';
@@ -439,29 +437,11 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
                   Identidade Digital
                 </h1>
                 <p className="text-sm text-slate-400 leading-relaxed">
-                  Selecione o sistema e informe as credenciais do usuário para validar a identidade.
+                  Informe as credenciais do usuário que está acessando o sistema
                 </p>
               </div>
 
               <form onSubmit={handleSubmitCredentials} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Sistema</label>
-                  <select
-                    value={selectedSlug}
-                    onChange={(e) => {
-                      setSelectedSlug(e.target.value);
-                      setMfaPending(null);
-                      setError(null);
-                    }}
-                    className="w-full bg-[#090D16] border border-slate-700/80 rounded-md px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-[#F6821F]"
-                  >
-                    {systems.map((sys) => (
-                      <option key={sys.id} value={sys.slug}>
-                        {sys.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
 
                 {error && (
                   <div className="flex items-start gap-2.5 p-3 rounded-md bg-red-950/40 border border-red-800/60 text-xs text-red-200">
@@ -642,64 +622,67 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
 
               <hr className="border-0 border-t border-slate-800/80" />
 
-              <div className="space-y-3">
-                {executionEnvironment && (
-                  <p className="text-xs font-medium text-[#F6821F]">
-                    Ambiente: {executionEnvironment}
-                  </p>
-                )}
-
-                {currentSystem && (
-                  <table className="w-full text-xs border-collapse">
+              {(executionEnvironment || currentSystem) && (
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr>
+                      <th colSpan={2} scope="colgroup" className="pb-2 text-left font-medium text-[#F6821F]">
+                        Sistema: {currentSystem ? currentSystem.slug : selectedSlug}
+                        {executionEnvironment ? ` (${executionEnvironment})` : ''}
+                      </th>
+                    </tr>
+                  </thead>
+                  {currentSystem && (
                     <tbody>
                       <tr>
-                        <th scope="row" className="py-0.5 pr-4 text-left font-normal text-slate-400">
-                          Sistema Selecionado
-                        </th>
-                        <td className="py-0.5 text-right font-mono text-slate-200">
-                          {currentSystem.slug}
-                        </td>
-                      </tr>
-                      <tr>
-                        <th scope="row" className="py-0.5 pr-4 text-left font-normal text-slate-400">
+                        <th scope="row" className="py-0.5 pr-4 text-left font-normal text-white">
                           Algorítimo de Assinatura
                         </th>
-                        <td className="py-0.5 text-right font-mono tabular-nums text-slate-200">
+                        <td className="py-0.5 text-right font-mono tabular-nums text-slate-400">
                           {currentSystem.signingAlg}
                         </td>
                       </tr>
                       <tr>
-                        <th scope="row" className="py-0.5 pr-4 text-left font-normal text-slate-400">
+                        <th scope="row" className="py-0.5 pr-4 text-left font-normal text-white">
                           Expiração do Token
                         </th>
-                        <td className="py-0.5 text-right font-mono tabular-nums text-slate-200">
+                        <td className="py-0.5 text-right font-mono tabular-nums text-slate-400">
                           {currentSystem.jwtTtlSeconds}s
                         </td>
                       </tr>
                       <tr>
-                        <th scope="row" className="py-0.5 pr-4 text-left font-normal text-slate-400">
+                        <th scope="row" className="py-0.5 pr-4 text-left font-normal text-white">
                           Expiração do Cache
                         </th>
-                        <td className="py-0.5 text-right font-mono tabular-nums text-slate-200">
+                        <td className="py-0.5 text-right font-mono tabular-nums text-slate-400">
                           {currentSystem.edgeCacheTtl}s
                         </td>
                       </tr>
                       <tr>
-                        <th scope="row" className="py-0.5 pr-4 text-left font-normal text-slate-400">
-                          Autenticação de 2 Fatores
+                        <th scope="row" className="py-0.5 pr-4 text-left font-normal text-white">
+                          Autenticação Segura
                         </th>
-                        <td
-                          className={`py-0.5 text-right ${
-                            currentSystem.requireMfa ? 'text-amber-400 font-medium' : 'text-slate-300'
-                          }`}
-                        >
-                          {currentSystem.requireMfa ? 'Obrigatório' : 'Opcional / Perfil'}
+                        <td className="py-0.5 text-right font-mono text-slate-400">
+                          {(() => {
+                            const labels: Record<string, string> = {
+                              totp: '2FA (TOTP)',
+                              sms: 'SMS',
+                              backup_code: 'Código de Backup',
+                            };
+                            const methods = (currentSystem.allowedMfaMethods || []).map(
+                              (m) => labels[m.toLowerCase()] || m.toUpperCase()
+                            );
+                            const reqLabel = currentSystem.requireMfa ? 'Obrigatório' : 'Opcional';
+                            return methods.length > 0
+                              ? `${methods.join(', ')} (${reqLabel})`
+                              : reqLabel;
+                          })()}
                         </td>
                       </tr>
                     </tbody>
-                  </table>
-                )}
-              </div>
+                  )}
+                </table>
+              )}
             </>
           ) : (
             /* Post-Login 2FA Gate */

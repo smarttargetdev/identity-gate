@@ -22,9 +22,12 @@ import {
   Edit3,
   X,
   SlidersHorizontal,
+  Cloud,
 } from 'lucide-react';
 import { gqlRequest } from '../lib/graphqlClient';
 import { InfoTooltip } from './InfoTooltip';
+import { useFirebase } from './FirebaseProvider';
+import type { ConsoleTheme } from '../lib/firebase';
 import type { ComplianceSummary, IamSystem, IamUser } from '../types/Identity';
 
 interface ProfileAndComplianceProps {
@@ -143,6 +146,43 @@ export const ProfileAndCompliance: React.FC<ProfileAndComplianceProps> = ({
 
   // Anonymize Confirmation
   const [confirmAnonModal, setConfirmAnonModal] = useState(false);
+
+  // Firebase Auth & Firestore Console Preferences
+  const {
+    authReady,
+    firebaseUser,
+    consolePref,
+    firebaseBusy,
+    firebaseError,
+    signInWithGoogle,
+    signOutFirebase,
+    saveConsolePreference,
+  } = useFirebase();
+  const [cloudTheme, setCloudTheme] = useState<ConsoleTheme>('dark');
+  const [cloudDefaultTab, setCloudDefaultTab] = useState('overview');
+  const [cloudSidebarCollapsed, setCloudSidebarCollapsed] = useState(false);
+
+  useEffect(() => {
+    if (consolePref) {
+      setCloudTheme(consolePref.theme);
+      setCloudDefaultTab(consolePref.defaultTab);
+      setCloudSidebarCollapsed(consolePref.sidebarCollapsed);
+    }
+  }, [consolePref]);
+
+  const handleSaveCloudPreference = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await saveConsolePreference({
+        theme: cloudTheme,
+        defaultTab: cloudDefaultTab,
+        sidebarCollapsed: cloudSidebarCollapsed,
+      });
+      onNotify('Preferências sincronizadas no Cloud Firestore.');
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message : 'Erro ao salvar no Firestore.');
+    }
+  };
 
   const loadProfile = async () => {
     try {
@@ -646,6 +686,107 @@ export const ProfileAndCompliance: React.FC<ProfileAndComplianceProps> = ({
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Firebase Auth & Firestore Console Preferences */}
+              <div className="bg-[#111827] border border-slate-800/90 rounded-lg p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Cloud className="w-4 h-4 text-[#F6821F]" />
+                    <h2 className="text-sm font-semibold text-white">Conta Firebase e Preferências em Nuvem</h2>
+                  </div>
+                  {authReady && firebaseUser ? (
+                    <button
+                      type="button"
+                      disabled={firebaseBusy}
+                      onClick={() => void signOutFirebase()}
+                      className="px-2.5 py-1 text-xs border border-slate-700 hover:border-red-500 text-slate-300 hover:text-red-300 rounded disabled:opacity-50"
+                    >
+                      Desconectar Google
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={!authReady || firebaseBusy}
+                      onClick={() => {
+                        void signInWithGoogle().then(() => {
+                          onNotify('Conta Google conectada ao Firebase.');
+                        }).catch(() => {});
+                      }}
+                      className="px-3 py-1.5 text-xs font-semibold bg-[#F6821F] hover:bg-[#e27316] text-slate-950 rounded disabled:opacity-50"
+                    >
+                      {firebaseBusy ? 'Conectando...' : 'Conectar com Google'}
+                    </button>
+                  )}
+                </div>
+
+                {firebaseError && (
+                  <div className="p-3 rounded bg-red-950/40 border border-red-800/60 text-xs text-red-200">
+                    {firebaseError}
+                  </div>
+                )}
+
+                {firebaseUser ? (
+                  <form onSubmit={handleSaveCloudPreference} className="space-y-4">
+                    <div className="text-xs text-slate-300 flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-[#090D16] border border-slate-800 rounded">
+                      <span>{firebaseUser.displayName || 'Conta Google'}</span>
+                      <span className="font-mono text-slate-400">{firebaseUser.email}</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-slate-300 mb-1">Tema do console</label>
+                        <select
+                          value={cloudTheme}
+                          onChange={(e) => setCloudTheme(e.target.value === 'contrast' ? 'contrast' : 'dark')}
+                          className="w-full bg-[#090D16] border border-slate-700 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#F6821F]"
+                        >
+                          <option value="dark">Escuro padrão</option>
+                          <option value="contrast">Alto contraste</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-300 mb-1">Seção inicial</label>
+                        <select
+                          value={cloudDefaultTab}
+                          onChange={(e) => setCloudDefaultTab(e.target.value)}
+                          className="w-full bg-[#090D16] border border-slate-700 rounded px-3 py-2 text-xs text-white focus:outline-none focus:border-[#F6821F]"
+                        >
+                          <option value="overview">Visão Geral</option>
+                          <option value="systems">Sistemas</option>
+                          <option value="users">Usuários</option>
+                          <option value="rbac">RBAC e Claims</option>
+                          <option value="audit">Auditoria</option>
+                          <option value="profile">Perfil</option>
+                          <option value="compliance">LGPD / GDPR</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={cloudSidebarCollapsed}
+                          onChange={(e) => setCloudSidebarCollapsed(e.target.checked)}
+                          className="rounded border-slate-600 bg-[#090D16] text-[#F6821F] focus:ring-[#F6821F]"
+                        />
+                        <span>Iniciar com menu lateral recolhido</span>
+                      </label>
+                      <button
+                        type="submit"
+                        disabled={firebaseBusy}
+                        className="px-3.5 py-1.5 text-xs font-semibold bg-[#F6821F] hover:bg-[#e27316] text-slate-950 rounded disabled:opacity-50"
+                      >
+                        {firebaseBusy ? 'Salvando...' : 'Salvar no Firestore'}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <p className="text-xs text-slate-400">
+                    Conecte sua conta Google para sincronizar tema, seção inicial e layout do console no Cloud Firestore.
+                  </p>
+                )}
               </div>
             </div>
           </div>

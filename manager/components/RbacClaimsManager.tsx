@@ -248,8 +248,8 @@ export const RbacClaimsManager: React.FC<RbacClaimsManagerProps> = ({
   const previewJwtPayload = {
     iss: 'https://isg.edge.local',
     sub: 'usr-exemplo-01',
-    aud: currentSystem?.slug || 'secure-gate',
-    sys: currentSystem?.slug || 'secure-gate',
+    aud: currentSystem?.slug || 'identity-gate',
+    sys: currentSystem?.slug || 'identity-gate',
     roles: inspectedRole ? [inspectedRole.name] : [],
     permissions: inspectedRole ? inspectedRole.permissions.map((p) => p.code) : [],
     claims: inspectedRole

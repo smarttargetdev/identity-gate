@@ -255,7 +255,7 @@ export default {
     // 2. OAuth Token Endpoint on Edge Worker
     if (url.pathname === '/api/oauth/token' && request.method === 'POST') {
       const secret = new TextEncoder().encode(env.JWT_HMAC_FALLBACK);
-      const jwt = await new SignJWT({ sys: 'secure-gate', roles: ['member'] })
+      const jwt = await new SignJWT({ sys: 'identity-gate', roles: ['member'] })
         .setProtectedHeader({ alg: 'HS256' })
         .setIssuer(env.IAM_JWT_ISSUER)
         .setIssuedAt()

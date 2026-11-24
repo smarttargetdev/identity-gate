@@ -39,6 +39,7 @@ interface PublicSystemItem {
   jwtTtlSeconds: number;
   signingAlg: string;
   requireMfa: boolean;
+  allowedMfaMethods: string[];
   allowedIdps: string[];
   edgeCacheTtl: number;
 }
@@ -173,7 +174,7 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
   const suppressFocusOpenRef = useRef(false);
 
   // Embedded helper state for testing autonomous GET / POST launches
-  const [testSystemSlug, setTestSystemSlug] = useState('secure-gate');
+  const [testSystemSlug, setTestSystemSlug] = useState('identity-gate');
 
   useEffect(() => {
     const handleClickOutside = (ev: MouseEvent) => {
@@ -193,9 +194,7 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
       .then((r) => r.json())
       .then((data: { platformConfig?: PublicPlatformConfig; systems?: PublicSystemItem[] }) => {
         const loadedSystems = data.systems || [];
-        setSystems(loadedSystems);
         setSystemsLoaded(true);
-
         if (lockedSystemParam) {
           const needle = lockedSystemParam.toLowerCase();
           const matched = loadedSystems.find(
@@ -205,12 +204,16 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
               s.clientId.toLowerCase() === needle ||
               s.name.toLowerCase() === needle
           );
+          setSystems(matched ? [matched] : []);
           setSelectedSlug(matched ? matched.slug : '');
-        } else if (loadedSystems.length > 0) {
-          setSelectedSlug((curr) =>
-            loadedSystems.some((s) => s.slug === curr) ? curr : loadedSystems[0].slug
-          );
-          setTestSystemSlug(loadedSystems[0].slug);
+        } else {
+          setSystems(loadedSystems);
+          if (loadedSystems.length > 0) {
+            setSelectedSlug((curr) =>
+              loadedSystems.some((s) => s.slug === curr) ? curr : loadedSystems[0].slug
+            );
+            setTestSystemSlug(loadedSystems[0].slug);
+          }
         }
 
         const cfg = data.platformConfig;
@@ -602,76 +605,78 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
                 )}
               </div>
 
-              {hasLockedSystem ? (
-                <input
-                  id="token-system-field"
-                  type="text"
-                  readOnly
-                  value={readonlySystemText}
-                  className="w-full bg-[#090D16]/60 border border-slate-800 rounded-md px-3.5 py-2.5 text-sm text-slate-200 cursor-not-allowed focus:outline-none"
+              <button
+                id="token-system-field"
+                type="button"
+                role="combobox"
+                disabled={hasLockedSystem}
+                aria-disabled={hasLockedSystem}
+                aria-expanded={!hasLockedSystem && systemDropdownOpen}
+                aria-haspopup="listbox"
+                aria-controls="token-system-listbox"
+                onClick={() => {
+                  if (!hasLockedSystem) setSystemDropdownOpen((prev) => !prev);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setSystemDropdownOpen(false);
+                }}
+                className={`w-full flex items-center justify-between gap-2 border rounded-md px-3.5 py-2.5 text-sm text-left transition-colors focus:outline-none ${
+                  hasLockedSystem
+                    ? 'bg-[#090D16]/60 border-slate-800 text-slate-300 cursor-not-allowed opacity-75'
+                    : 'bg-[#090D16] border-slate-700/80 hover:border-slate-600 text-slate-100 focus:border-[#F6821F]'
+                }`}
+              >
+                <span className="truncate">
+                  {currentSystem
+                    ? currentSystem.name
+                    : hasLockedSystem && !systemsLoaded
+                      ? 'Carregando sistema...'
+                      : hasLockedSystem
+                        ? lockedSystemParam
+                        : 'Selecione um sistema'}
+                </span>
+                <ChevronDown
+                  className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${
+                    !hasLockedSystem && systemDropdownOpen ? 'rotate-180' : ''
+                  }`}
                 />
-              ) : (
-                <>
-                  <button
-                    id="token-system-field"
-                    type="button"
-                    role="combobox"
-                    aria-expanded={systemDropdownOpen}
-                    aria-haspopup="listbox"
-                    aria-controls="token-system-listbox"
-                    onClick={() => setSystemDropdownOpen((prev) => !prev)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Escape') setSystemDropdownOpen(false);
-                    }}
-                    className="w-full flex items-center justify-between gap-2 bg-[#090D16] border border-slate-700/80 hover:border-slate-600 rounded-md px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-[#F6821F] transition-colors text-left"
-                  >
-                    <span className="truncate">
-                      {currentSystem ? currentSystem.name : 'Selecione um sistema'}
-                    </span>
-                    <ChevronDown
-                      className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${
-                        systemDropdownOpen ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </button>
+              </button>
 
-                  {systemDropdownOpen && (
-                    <div
-                      id="token-system-listbox"
-                      role="listbox"
-                      aria-labelledby="token-system-field"
-                      className="absolute z-30 left-0 right-0 mt-1.5 bg-[#090D16] border border-slate-700/90 rounded-md shadow-xl overflow-hidden max-h-60 overflow-y-auto divide-y divide-slate-800/60"
-                    >
-                      {systems.map((sys) => {
-                        const isSelected = sys.slug === selectedSlug;
-                        return (
-                          <button
-                            key={sys.id}
-                            type="button"
-                            role="option"
-                            aria-selected={isSelected}
-                            onClick={() => {
-                              setSelectedSlug(sys.slug);
-                              setError(null);
-                              setSystemDropdownOpen(false);
-                            }}
-                            className={`w-full flex items-center justify-between gap-2 px-3.5 py-2 text-left transition-colors ${
-                              isSelected
-                                ? 'bg-[#F6821F]/15 text-white'
-                                : 'hover:bg-slate-800/60 text-slate-200'
-                            }`}
-                          >
-                            <div className="min-w-0">
-                              <div className="text-xs font-medium text-white truncate">{sys.name}</div>
-                              <div className="text-[11px] font-mono text-[#F6821F] truncate">{sys.slug}</div>
-                            </div>
-                            {isSelected && <Check className="w-3.5 h-3.5 text-[#F6821F] shrink-0" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
+              {!hasLockedSystem && systemDropdownOpen && (
+                <div
+                  id="token-system-listbox"
+                  role="listbox"
+                  aria-labelledby="token-system-field"
+                  className="absolute z-30 left-0 right-0 mt-1.5 bg-[#090D16] border border-slate-700/90 rounded-md shadow-xl overflow-hidden max-h-60 overflow-y-auto divide-y divide-slate-800/60"
+                >
+                  {systems.map((sys) => {
+                    const isSelected = sys.slug === selectedSlug;
+                    return (
+                      <button
+                        key={sys.id}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        onClick={() => {
+                          setSelectedSlug(sys.slug);
+                          setError(null);
+                          setSystemDropdownOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between gap-2 px-3.5 py-2 text-left transition-colors ${
+                          isSelected
+                            ? 'bg-[#F6821F]/15 text-white'
+                            : 'hover:bg-slate-800/60 text-slate-200'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium text-white truncate">{sys.name}</div>
+                          <div className="text-[11px] font-mono text-[#F6821F] truncate">{sys.slug}</div>
+                        </div>
+                        {isSelected && <Check className="w-3.5 h-3.5 text-[#F6821F] shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
@@ -833,12 +838,69 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
             </button>
           </form>
 
-          {currentSystem && (
-            <div className="pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-400 tabular-nums">
-              <span>Algoritmo: {currentSystem.signingAlg}</span>
-              <span>TTL: {currentSystem.jwtTtlSeconds}s</span>
-              <span>2FA: {currentSystem.requireMfa ? 'Obrigatório' : 'Opcional'}</span>
-            </div>
+          {(executionEnvironment || currentSystem) && (
+            <>
+              <hr className="border-0 border-t border-slate-800/80" />
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr>
+                    <th colSpan={2} scope="colgroup" className="pb-2 text-left font-medium text-[#F6821F]">
+                      Sistema: {currentSystem ? currentSystem.slug : selectedSlug || lockedSystemParam || '—'}
+                      {executionEnvironment ? ` (${executionEnvironment})` : ''}
+                    </th>
+                  </tr>
+                </thead>
+                {currentSystem && (
+                  <tbody>
+                    <tr>
+                      <th scope="row" className="py-0.5 pr-4 text-left font-normal text-white">
+                        Algorítimo de Assinatura
+                      </th>
+                      <td className="py-0.5 text-right font-mono tabular-nums text-slate-400">
+                        {currentSystem.signingAlg}
+                      </td>
+                    </tr>
+                    <tr>
+                      <th scope="row" className="py-0.5 pr-4 text-left font-normal text-white">
+                        Expiração do Token
+                      </th>
+                      <td className="py-0.5 text-right font-mono tabular-nums text-slate-400">
+                        {currentSystem.jwtTtlSeconds}s
+                      </td>
+                    </tr>
+                    <tr>
+                      <th scope="row" className="py-0.5 pr-4 text-left font-normal text-white">
+                        Expiração do Cache
+                      </th>
+                      <td className="py-0.5 text-right font-mono tabular-nums text-slate-400">
+                        {currentSystem.edgeCacheTtl}s
+                      </td>
+                    </tr>
+                    <tr>
+                      <th scope="row" className="py-0.5 pr-4 text-left font-normal text-white">
+                        Autenticação Segura
+                      </th>
+                      <td className="py-0.5 text-right font-mono text-slate-400">
+                        {(() => {
+                          const labels: Record<string, string> = {
+                            totp: '2FA (TOTP)',
+                            sms: 'SMS',
+                            backup_code: 'Código de Backup',
+                          };
+                          const methods = (currentSystem.allowedMfaMethods || []).map(
+                            (m) => labels[m.toLowerCase()] || m.toUpperCase()
+                          );
+                          const reqLabel = currentSystem.requireMfa ? 'Obrigatório' : 'Opcional';
+                          return methods.length > 0
+                            ? `${methods.join(', ')} (${reqLabel})`
+                            : reqLabel;
+                        })()}
+                      </td>
+                    </tr>
+                  </tbody>
+                )}
+              </table>
+            </>
           )}
         </>
       ) : (

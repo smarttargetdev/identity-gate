@@ -11,6 +11,13 @@
 
 import {createRoot} from 'react-dom/client';
 import Application from './Application.tsx';
+import {FirebaseErrorBoundary, FirebaseProvider} from './components/FirebaseProvider.tsx';
 import './index.css';
 
-createRoot(document.getElementById('root')!).render(<Application />);
+createRoot(document.getElementById('root')!).render(
+  <FirebaseErrorBoundary>
+    <FirebaseProvider>
+      <Application />
+    </FirebaseProvider>
+  </FirebaseErrorBoundary>
+);

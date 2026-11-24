@@ -96,7 +96,7 @@ function getAppUrl(req: express.Request): string {
 function getSystemBySlugOrId(identifier?: string): SystemRow | undefined {
   dbStats.totalReads += 1;
   if (!identifier) {
-    return db.prepare("SELECT * FROM systems WHERE slug = 'secure-gate' AND status = 'active'").get() as
+    return db.prepare("SELECT * FROM systems WHERE slug = 'identity-gate' AND status = 'active'").get() as
       | SystemRow
       | undefined;
   }

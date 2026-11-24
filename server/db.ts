@@ -515,7 +515,7 @@ export function seedInitialData(): void {
   insertSystem.run(
     sysCoreId,
     'Identity Secure Gate',
-    'secure-gate',
+    'identity-gate',
     'Painel principal de governanca IAM, emissao de tokens e gestao multi-sistema.',
     'cid_secure_gate',
     sha256('csec_vektor_core_demo_secret'),
@@ -816,7 +816,7 @@ export function seedInitialData(): void {
       actor_hash: sha256(adminId).slice(0, 16),
       actor_masked: 'ad***@smarttarget.com.br',
       system_id: sysCoreId,
-      system_slug: 'secure-gate',
+      system_slug: 'identity-gate',
       action: 'SYSTEM_BOOTSTRAP',
       resource_type: 'system',
       resource_id: sysCoreId,
@@ -875,11 +875,11 @@ if (legacyCoreRow && !newCoreRow) {
 }
 
 db.prepare("UPDATE systems SET name = 'Identity Secure Gate' WHERE id = 'identity-secure-gate' AND name IN ('Vektor Core Console', 'Smarties Gate Core', 'Smarties Secure Gate Core', 'Secure Gate')").run();
-db.prepare("UPDATE systems SET slug = 'secure-gate' WHERE id = 'identity-secure-gate' AND slug = 'vektor-core'").run();
+db.prepare("UPDATE systems SET slug = 'identity-gate' WHERE id = 'identity-secure-gate' AND slug IN ('vektor-core', 'secure-gate')").run();
 db.prepare("UPDATE systems SET slug = 'edgepay-gateway' WHERE id = 'sys-edgepay-gw' AND slug = 'edgepay-api'").run();
 db.prepare("UPDATE systems SET name = 'Atlas Analytics' WHERE id = 'sys-atlas-bi' AND name = 'Atlas Analytics Portal'").run();
 db.prepare("UPDATE systems SET slug = 'atlas-analytics' WHERE id = 'sys-atlas-bi' AND slug = 'atlas-bi'").run();
-db.prepare("UPDATE audit_logs SET system_slug = 'secure-gate' WHERE system_id = 'identity-secure-gate' AND system_slug = 'vektor-core'").run();
+db.prepare("UPDATE audit_logs SET system_slug = 'identity-gate' WHERE system_id = 'identity-secure-gate' AND system_slug IN ('vektor-core', 'secure-gate')").run();
 db.prepare("UPDATE audit_logs SET system_slug = 'edgepay-gateway' WHERE system_id = 'sys-edgepay-gw' AND system_slug = 'edgepay-api'").run();
 db.prepare("UPDATE audit_logs SET system_slug = 'atlas-analytics' WHERE system_id = 'sys-atlas-bi' AND system_slug = 'atlas-bi'").run();
 db.prepare("UPDATE users SET email = 'administrator@smarttarget.com.br' WHERE id = 'usr-admin-01' AND email = 'admin@vektor.iam'").run();

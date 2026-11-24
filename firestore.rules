@@ -1,0 +1,196 @@
+rules_version = '2';
+
+/**
+ * File: firestore.rules
+ * Kind: Firestore Security Rules
+ * Container: /
+ * Summary: Regras de segurança Cloud Firestore auditadas segundo os Oito Pilares e blueprint de identidade/preferências.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email == 'osvandir.junior@gmail.com'
+      );
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'displayName', 'role', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'role', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == userId
+        && data.displayName is string
+        && data.displayName.size() >= 1
+        && data.displayName.size() <= 120
+        && data.role is string
+        && data.role in ['member', 'admin']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserPrivateInfo(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == userId
+        && data.email is string
+        && data.email.size() >= 3
+        && data.email.size() <= 254
+        && data.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$')
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserConsolePreference(data, userId) {
+      return data.keys().hasAll(['ownerId', 'theme', 'defaultTab', 'sidebarCollapsed', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'theme', 'defaultTab', 'sidebarCollapsed', 'createdAt', 'updatedAt'])
+        && isValidId(data.ownerId)
+        && data.ownerId == userId
+        && data.theme is string
+        && data.theme in ['dark', 'contrast']
+        && data.defaultTab is string
+        && data.defaultTab.size() >= 1
+        && data.defaultTab.size() <= 40
+        && data.defaultTab.matches('^[a-z0-9\\-]+$')
+        && data.sidebarCollapsed is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAdminRole(data, userId) {
+      return data.keys().hasAll(['uid', 'grantedAt'])
+        && data.keys().hasOnly(['uid', 'grantedAt'])
+        && isValidId(data.uid)
+        && data.uid == userId
+        && data.grantedAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          (isOwner(userId) && incoming().role == 'member') ||
+          isAdmin()
+        );
+
+      allow update: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (isOwner(userId)
+            && incoming().role == existing().role
+            && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt'])) ||
+          (isAdmin()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'role', 'updatedAt']))
+        );
+
+      allow delete: if isSignedIn() && isValidId(userId) && isAdmin();
+
+      match /private/{docId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(docId) && docId == 'info' && (isOwner(userId) || isAdmin());
+        allow list: if false;
+
+        allow create: if isVerifiedUser()
+          && isValidId(userId)
+          && isValidId(docId)
+          && docId == 'info'
+          && isValidUserPrivateInfo(incoming(), userId)
+          && (isOwner(userId) || isAdmin())
+          && incoming().updatedAt == request.time;
+
+        allow update: if isVerifiedUser()
+          && isValidId(userId)
+          && isValidId(docId)
+          && docId == 'info'
+          && isValidUserPrivateInfo(incoming(), userId)
+          && (isOwner(userId) || isAdmin())
+          && incoming().uid == existing().uid
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'updatedAt']);
+
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(docId) && isAdmin();
+      }
+
+      match /preferences/{prefId} {
+        allow get: if isSignedIn() && isValidId(userId) && isValidId(prefId) && (isOwner(userId) || isAdmin());
+        allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+
+        allow create: if isVerifiedUser()
+          && isValidId(userId)
+          && isValidId(prefId)
+          && isValidUserConsolePreference(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && (isOwner(userId) || isAdmin())
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow update: if isVerifiedUser()
+          && isValidId(userId)
+          && isValidId(prefId)
+          && isValidUserConsolePreference(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && incoming().diff(existing()).affectedKeys().hasOnly(['theme', 'defaultTab', 'sidebarCollapsed', 'updatedAt'])
+          && (isOwner(userId) || isAdmin())
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow delete: if isSignedIn() && isValidId(userId) && isValidId(prefId) && (isOwner(userId) || isAdmin());
+      }
+    }
+
+    match /admins/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isAdmin()
+        && isValidId(userId)
+        && isValidAdminRole(incoming(), userId)
+        && incoming().grantedAt == request.time;
+      allow update: if false;
+      allow delete: if isSignedIn() && isValidId(userId) && isAdmin();
+    }
+  }
+}
