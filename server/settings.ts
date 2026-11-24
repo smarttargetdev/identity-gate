@@ -1,3 +1,14 @@
+/**
+ * File: settings.ts
+ * Kind: TypeScript
+ * Container: /server
+ * Summary: Gerenciamento, validação e persistência de configurações globais da plataforma IAM.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import { db, dbStats, setAuditBatchSize } from './db.ts';
 
 export type ExecutionEnvironment = 'Desenvolvimento' | 'Homologação' | 'Produção';

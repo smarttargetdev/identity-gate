@@ -1,3 +1,14 @@
+/**
+ * File: db.ts
+ * Kind: TypeScript
+ * Container: /server
+ * Summary: Camada de persistência SQLite WAL, esquema relacional IAM, fila de auditoria e seed inicial.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
 import path from 'node:path';

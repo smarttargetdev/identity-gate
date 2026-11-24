@@ -1,0 +1,19 @@
+{
+  "system": {
+    "name": "Identity Secure Gate",
+    "description": "Complete IAM platform for hybrid and multi-cloud environments, supporting OAuth 2.0, OIDC, SAML 2.0, and SCIM. It centralizes identity lifecycle management with RBAC/ABAC, SSO, Adaptive MFA, PAM, and real-time audit logs for GDPR, LGPD, and ISO 27001 compliance."
+  },
+  "version": {
+    "major": 1,
+    "minor": 0,
+    "revision": 0,
+    "number": 1,
+    "codename": "genesis"
+  },
+  "repository": {
+    "server": "https://github.com",
+    "user": "smarttargetdev",
+    "email": "developer@smarttarget.com.br",
+    "name": "identity-gate"
+  }
+}

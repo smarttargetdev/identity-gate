@@ -1,3 +1,14 @@
+/**
+ * File: OverviewTelemetry.tsx
+ * Kind: TypeScript React
+ * Container: /manager/components
+ * Summary: Painel de visão geral com KPIs, gráficos de usuários ativos e respostas, métricas de borda e alertas.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as d3 from 'd3';
 import {
@@ -46,7 +57,7 @@ import type {
   IamSystem,
   IamUser,
   SystemHealthEvent,
-} from '../types/iam';
+} from '../types/Identity';
 
 export type OverviewSection =
   | 'overview'

@@ -1,3 +1,14 @@
+/**
+ * File: vite.config.ts
+ * Kind: TypeScript
+ * Container: /
+ * Summary: Configuração do bundler Vite, plugins React/Tailwind e cópia de ativos estáticos de manager.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import fs from 'fs';

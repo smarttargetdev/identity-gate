@@ -1,3 +1,14 @@
+/**
+ * File: edgeCache.ts
+ * Kind: TypeScript
+ * Container: /server
+ * Summary: Simulação de cache de borda e versionamento KV de permissões e políticas por sistema.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import crypto from 'node:crypto';
 import { db, dbStats } from './db.ts';
 

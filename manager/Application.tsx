@@ -1,3 +1,14 @@
+/**
+ * File: Application.tsx
+ * Kind: TypeScript React
+ * Container: /manager
+ * Summary: Shell principal do console IAM com navegação lateral, barra superior, atalhos, saúde do sistema e sessão.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Activity,
@@ -29,7 +40,7 @@ import {
   KeyRound,
   Layers,
 } from 'lucide-react';
-import { AuthGate } from './components/AuthGate';
+import { LoginGate } from './components/LoginGate';
 import { OverviewTelemetry, type OverviewSection } from './components/OverviewTelemetry';
 import { AuditLogs } from './components/AuditLogs';
 import { SystemsManager } from './components/SystemsManager';
@@ -39,14 +50,14 @@ import { IdpAndOAuthSandbox } from './components/IdpAndOAuthSandbox';
 import { GraphqlAndCloudflare } from './components/GraphqlAndCloudflare';
 import { ProfileAndCompliance } from './components/ProfileAndCompliance';
 import { SystemSettings } from './components/SystemSettings';
-import { TokenPortal } from './components/TokenPortal';
+import { TokenGate } from './components/TokenGate';
 import { LatencySparkline } from './components/LatencySparkline';
 import { BrandHeaderLogo } from './components/BrandHeaderLogo';
 import { subscribeDiagnostics } from './lib/graphqlClient';
 import { playHealthAlertSound, unlockHealthAlertAudio } from './lib/healthAlertAudio';
 import { useSessionExpiration } from './hooks/useSessionExpiration';
 import { useSystemHealth, type SystemHealthLevel } from './hooks/useSystemHealth';
-import type { AuthSessionState, DiagnosticHeaders, PublicPlatformConfig } from './types/iam';
+import type { AuthSessionState, DiagnosticHeaders, PublicPlatformConfig } from './types/Identity';
 
 type NavTab =
   | OverviewSection
@@ -131,7 +142,7 @@ function inferToastVariant(message: string): ToastVariant {
   return 'success';
 }
 
-export default function App() {
+export default function Application() {
   const [session, setSession] = useState<AuthSessionState | null>(() => {
     try {
       const saved = localStorage.getItem(SESSION_STORAGE_KEY);
@@ -350,11 +361,11 @@ export default function App() {
     typeof window !== 'undefined' && /^\/obter-token\/?$/i.test(window.location.pathname);
 
   if (isTokenPortalRoute) {
-    return <TokenPortal standalone />;
+    return <TokenGate standalone />;
   }
 
   if (!session) {
-    return <AuthGate onAuthenticated={handleAuthenticated} />;
+    return <LoginGate onAuthenticated={handleAuthenticated} />;
   }
 
   const isSuperAdmin = session.user.roles.includes('super_admin');
@@ -972,7 +983,7 @@ export default function App() {
             <IdpAndOAuthSandbox token={session.token} canWriteSystems={canWriteSystems} onNotify={notify} />
           )}
           {resolvedActiveTab === 'graphql' && <GraphqlAndCloudflare token={session.token} onNotify={notify} />}
-          {resolvedActiveTab === 'get-token' && <TokenPortal standalone={false} onNotify={notify} />}
+          {resolvedActiveTab === 'get-token' && <TokenGate standalone={false} onNotify={notify} />}
           {resolvedActiveTab === 'compliance' && (
             <ProfileAndCompliance
               token={session.token}

@@ -1,4 +1,15 @@
-import type { DiagnosticHeaders } from '../types/iam';
+/**
+ * File: graphqlClient.ts
+ * Kind: TypeScript
+ * Container: /manager/lib
+ * Summary: Cliente GraphQL autenticado com captura de cabeçalhos de diagnóstico de cache e consultas SQLite.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
+import type { DiagnosticHeaders } from '../types/Identity';
 
 export type DiagnosticListener = (diag: DiagnosticHeaders) => void;
 

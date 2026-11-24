@@ -1,3 +1,14 @@
+/**
+ * File: cryptoAuth.ts
+ * Kind: TypeScript
+ * Container: /server
+ * Summary: Criptografia de senhas/segredos, chaves RSA JWKS, emissão/validação de JWT e TOTP 2FA.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';

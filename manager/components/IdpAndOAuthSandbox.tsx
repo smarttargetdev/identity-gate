@@ -1,8 +1,19 @@
+/**
+ * File: IdpAndOAuthSandbox.tsx
+ * Kind: TypeScript React
+ * Container: /manager/components
+ * Summary: Gestão de provedores de identidade federados OIDC/SAML e sandbox interativo OAuth 2.0 + PKCE.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import React, { useEffect, useState } from 'react';
 import { Globe, Play, CheckCircle2, KeyRound, Save, X, SlidersHorizontal } from 'lucide-react';
 import { gqlRequest } from '../lib/graphqlClient';
 import { InfoTooltip } from './InfoTooltip';
-import type { IamSystem, IdentityProvider } from '../types/iam';
+import type { IamSystem, IdentityProvider } from '../types/Identity';
 
 interface IdpAndOAuthSandboxProps {
   token: string;

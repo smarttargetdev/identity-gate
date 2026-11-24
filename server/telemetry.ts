@@ -1,3 +1,14 @@
+/**
+ * File: telemetry.ts
+ * Kind: TypeScript
+ * Container: /server
+ * Summary: Telemetria estruturada em tempo real via SSE, histórico de saúde do sistema e registro de exceções.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import type { Request, Response } from 'express';
 import crypto from 'node:crypto';
 import {

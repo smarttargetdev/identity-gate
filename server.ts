@@ -1,3 +1,14 @@
+/**
+ * File: server.ts
+ * Kind: TypeScript
+ * Container: /
+ * Summary: Servidor HTTP Express principal com endpoints OAuth 2.0/OIDC, autenticação 2FA, GraphQL, SSE e integração Vite.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import 'dotenv/config';
 import crypto from 'node:crypto';
 import fs from 'node:fs';

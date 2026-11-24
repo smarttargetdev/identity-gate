@@ -1,3 +1,14 @@
+/**
+ * File: DetailedErrorLog.tsx
+ * Kind: TypeScript React
+ * Container: /manager/components
+ * Summary: Painel de inspeção, filtragem, simulação e expurgo de exceções técnicas detalhadas.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertOctagon,
@@ -13,7 +24,7 @@ import {
 } from 'lucide-react';
 import { gqlRequest } from '../lib/graphqlClient';
 import { InfoTooltip } from './InfoTooltip';
-import type { SystemErrorLog } from '../types/iam';
+import type { SystemErrorLog } from '../types/Identity';
 
 interface DetailedErrorLogProps {
   token: string;

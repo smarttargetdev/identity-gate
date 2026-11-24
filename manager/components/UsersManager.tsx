@@ -1,8 +1,19 @@
+/**
+ * File: UsersManager.tsx
+ * Kind: TypeScript React
+ * Container: /manager/components
+ * Summary: Gerenciamento CRUD de usuários via GraphQL e vínculos de roles multi-sistema.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import React, { useEffect, useState } from 'react';
 import { UserPlus, Edit3, Trash2, Link2, X, Save } from 'lucide-react';
 import { gqlRequest } from '../lib/graphqlClient';
 import { InfoTooltip } from './InfoTooltip';
-import type { IamSystem, IamUser } from '../types/iam';
+import type { IamSystem, IamUser } from '../types/Identity';
 
 interface UsersManagerProps {
   token: string;

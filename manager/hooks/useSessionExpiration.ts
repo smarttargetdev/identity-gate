@@ -1,3 +1,14 @@
+/**
+ * File: useSessionExpiration.ts
+ * Kind: TypeScript
+ * Container: /manager/hooks
+ * Summary: Hook React para contagem regressiva de expiração do JWT e disparo de aviso preventivo de sessão.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import { useEffect, useState } from 'react';
 
 export interface SessionExpirationState {

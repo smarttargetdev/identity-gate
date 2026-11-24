@@ -1,8 +1,19 @@
+/**
+ * File: SystemsManager.tsx
+ * Kind: TypeScript React
+ * Container: /manager/components
+ * Summary: CRUD administrativo de sistemas clientes OAuth/OIDC, segredos, TTL e políticas de cache/2FA.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import React, { useEffect, useState } from 'react';
 import { Plus, Edit3, Trash2, Key, ShieldCheck, X } from 'lucide-react';
 import { gqlRequest } from '../lib/graphqlClient';
 import { InfoTooltip } from './InfoTooltip';
-import type { IamSystem } from '../types/iam';
+import type { IamSystem } from '../types/Identity';
 
 interface IdentifierConfig {
   systemIdPrefix: string;

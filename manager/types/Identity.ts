@@ -1,3 +1,14 @@
+/**
+ * File: Identity.ts
+ * Kind: TypeScript
+ * Container: /manager/types
+ * Summary: Definições de tipos TypeScript para entidades IAM, sessões, RBAC, auditoria, borda e configurações.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 export interface DiagnosticHeaders {
   cacheStatus: string;
   cacheKey: string;

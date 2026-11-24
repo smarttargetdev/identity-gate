@@ -1,8 +1,19 @@
+/**
+ * File: RbacClaimsManager.tsx
+ * Kind: TypeScript React
+ * Container: /manager/components
+ * Summary: Gestão de funções (roles), permissões atômicas e claims personalizadas por sistema.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, Save, Shield, Edit3, X, KeyRound } from 'lucide-react';
 import { gqlRequest } from '../lib/graphqlClient';
 import { InfoTooltip } from './InfoTooltip';
-import type { IamSystem, Permission, Role } from '../types/iam';
+import type { IamSystem, Permission, Role } from '../types/Identity';
 
 interface RbacClaimsManagerProps {
   token: string;

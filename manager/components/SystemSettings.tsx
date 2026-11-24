@@ -1,3 +1,14 @@
+/**
+ * File: SystemSettings.tsx
+ * Kind: TypeScript React
+ * Container: /manager/components
+ * Summary: Painel administrativo de configurações globais de tokens, segurança, borda, auditoria e privacidade.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -24,7 +35,7 @@ import { gqlRequest } from '../lib/graphqlClient';
 import { playHealthAlertSound } from '../lib/healthAlertAudio';
 import { DetailedErrorLog } from './DetailedErrorLog';
 import { InfoTooltip } from './InfoTooltip';
-import type { ExecutionEnvironment, PlatformSystemSettings } from '../types/iam';
+import type { ExecutionEnvironment, PlatformSystemSettings } from '../types/Identity';
 
 interface SystemSettingsProps {
   token: string;

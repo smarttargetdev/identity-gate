@@ -1,3 +1,14 @@
+/**
+ * File: AuditLogs.tsx
+ * Kind: TypeScript React
+ * Container: /manager/components
+ * Summary: Visualizador de logs de auditoria em tempo real via SSE, filtros, ordenação e exportação JSON/CSV.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Search,
@@ -15,7 +26,7 @@ import {
 } from 'lucide-react';
 import { gqlRequest } from '../lib/graphqlClient';
 import { InfoTooltip } from './InfoTooltip';
-import type { AuditLog, DiagnosticHeaders, IamSystem } from '../types/iam';
+import type { AuditLog, DiagnosticHeaders, IamSystem } from '../types/Identity';
 
 export interface AuditLogsProps {
   token: string;

@@ -1,3 +1,14 @@
+/**
+ * File: TokenGate.tsx
+ * Kind: TypeScript React
+ * Container: /manager/components
+ * Summary: Portal de emissão direta de tokens JWT e validação de identidade no console e na rota /obter-token.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
@@ -15,7 +26,7 @@ import {
   Smartphone,
   X,
 } from 'lucide-react';
-import type { ExecutionEnvironment, PublicPlatformConfig } from '../types/iam';
+import type { ExecutionEnvironment, PublicPlatformConfig } from '../types/Identity';
 import { BrandHeaderLogo } from './BrandHeaderLogo';
 
 interface PublicSystemItem {
@@ -73,7 +84,7 @@ interface BootstrapParams {
   state?: string;
 }
 
-interface TokenPortalProps {
+interface TokenGateProps {
   standalone?: boolean;
   onNotify?: (msg: string) => void;
 }
@@ -131,7 +142,7 @@ function readInitialRequestParams(): BootstrapParams {
   };
 }
 
-export const TokenPortal: React.FC<TokenPortalProps> = ({ standalone = false, onNotify }) => {
+export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNotify }) => {
   const initialParams = useMemo(() => readInitialRequestParams(), []);
   const lockedSystemParam = standalone ? initialParams.system || '' : initialParams.system || '';
   const hasLockedSystem = Boolean(lockedSystemParam);
@@ -573,7 +584,7 @@ export const TokenPortal: React.FC<TokenPortalProps> = ({ standalone = false, on
             <p className="text-xs text-slate-400 leading-relaxed">
               {hasLockedSystem
                 ? 'O sistema de destino foi definido pelos parâmetros da requisição e está bloqueado para alteração.'
-                : 'Selecione o sistema e informe as credenciais do usuário para gerar e retornar o token JWT assinado.'}
+                : 'Selecione o sistema e informe as credenciais do usuário'}
             </p>
           </div>
 
@@ -817,7 +828,7 @@ export const TokenPortal: React.FC<TokenPortalProps> = ({ standalone = false, on
               disabled={loading || lockedSystemInvalid || !selectedSlug}
               className="w-full flex items-center justify-center gap-2 bg-[#F6821F] hover:bg-[#e27316] disabled:opacity-50 text-slate-950 font-semibold text-sm py-2.5 px-4 rounded-md transition-colors whitespace-nowrap"
             >
-              <span>{loading ? 'Autenticando e Gerando JWT...' : 'Autenticar e Gerar Token JWT'}</span>
+              <span>{loading ? 'Autenticando...' : 'Autenticar'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>

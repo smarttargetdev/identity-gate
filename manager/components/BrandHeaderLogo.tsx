@@ -1,3 +1,14 @@
+/**
+ * File: BrandHeaderLogo.tsx
+ * Kind: TypeScript React
+ * Container: /manager/components
+ * Summary: Componente compartilhado de logotipo e título da plataforma para padronizar cabeçalhos.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import React from 'react';
 
 interface BrandHeaderLogoProps {

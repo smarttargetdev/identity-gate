@@ -1,6 +1,17 @@
+/**
+ * File: LatencySparkline.tsx
+ * Kind: TypeScript React
+ * Container: /manager/components
+ * Summary: Mini gráfico SVG de tendência da latência média nos últimos 10 minutos para a barra de status.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import React, { useId } from 'react';
 import type { SystemHealthLevel } from '../hooks/useSystemHealth';
-import type { LatencyTrendPoint } from '../types/iam';
+import type { LatencyTrendPoint } from '../types/Identity';
 
 interface LatencySparklineProps {
   points: LatencyTrendPoint[];

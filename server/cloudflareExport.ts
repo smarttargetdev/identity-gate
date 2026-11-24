@@ -1,3 +1,14 @@
+/**
+ * File: cloudflareExport.ts
+ * Kind: TypeScript
+ * Container: /server
+ * Summary: Geração de artefatos e pacote ZIP para implantação em Cloudflare Workers, D1 e KV.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import JSZip from 'jszip';
 import { D1_SCHEMA_SQL } from './db.ts';
 import { getPlatformSettings, type PlatformSettings } from './settings.ts';

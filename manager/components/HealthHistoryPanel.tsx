@@ -1,3 +1,14 @@
+/**
+ * File: HealthHistoryPanel.tsx
+ * Kind: TypeScript React
+ * Container: /manager/components
+ * Summary: Linha do tempo das transições de saúde e latência do sistema registradas pelo backend.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import React, { useMemo, useState } from 'react';
 import {
   Activity,
@@ -8,7 +19,7 @@ import {
   History,
 } from 'lucide-react';
 import { InfoTooltip } from './InfoTooltip';
-import type { SystemHealthEvent } from '../types/iam';
+import type { SystemHealthEvent } from '../types/Identity';
 
 interface HealthHistoryPanelProps {
   events: SystemHealthEvent[];

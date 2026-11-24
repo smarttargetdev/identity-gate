@@ -1,3 +1,14 @@
+/**
+ * File: InfoTooltip.tsx
+ * Kind: TypeScript React
+ * Container: /manager/components
+ * Summary: Tooltip informativo acessível com suporte a hover, foco e fixação por clique.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Info } from 'lucide-react';
 

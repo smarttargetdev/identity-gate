@@ -1,3 +1,14 @@
+/**
+ * File: index.css
+ * Kind: CSS
+ * Container: /manager
+ * Summary: Estilos base Tailwind CSS v4, tokens tipográficos e tema escuro da console IAM.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 

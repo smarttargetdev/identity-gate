@@ -1,8 +1,19 @@
+/**
+ * File: GraphqlAndCloudflare.tsx
+ * Kind: TypeScript React
+ * Container: /manager/components
+ * Summary: Console interativa GraphQL e exportação de pacote pronto para Cloudflare Workers e D1.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import React, { useCallback, useEffect, useState } from 'react';
 import { Play, Download, Code2, Zap, RefreshCw } from 'lucide-react';
 import { gqlRequest } from '../lib/graphqlClient';
 import { InfoTooltip } from './InfoTooltip';
-import type { DiagnosticHeaders } from '../types/iam';
+import type { DiagnosticHeaders } from '../types/Identity';
 
 interface GraphqlAndCloudflareProps {
   token: string;

@@ -1,6 +1,17 @@
+/**
+ * File: LoginGate.tsx
+ * Kind: TypeScript React
+ * Container: /manager/components
+ * Summary: Portal de autenticação unificado com seleção de sistema, credenciais, desafio 2FA e provedores IdP.
+ * Version: 1.0.0
+ * Created: 2026-11-24
+ * Modified: 2026-11-24
+ * Developer: Osvandir Júnior
+ */
+
 import React, { useEffect, useRef, useState } from 'react';
 import { Shield, KeyRound, Smartphone, Lock, ArrowRight, Globe, AlertCircle, CheckCircle2, ChevronDown, X, Check } from 'lucide-react';
-import type { AuthSessionState, ExecutionEnvironment, PublicPlatformConfig } from '../types/iam';
+import type { AuthSessionState, ExecutionEnvironment, PublicPlatformConfig } from '../types/Identity';
 import { BrandHeaderLogo } from './BrandHeaderLogo';
 
 interface PublicSystemItem {
@@ -31,7 +42,7 @@ interface MfaPendingState {
   systemName: string;
 }
 
-interface AuthGateProps {
+interface LoginGateProps {
   onAuthenticated: (session: AuthSessionState) => void;
 }
 
@@ -50,7 +61,7 @@ const QUICK_ACCOUNTS = [
   },
 ] as const;
 
-export const AuthGate: React.FC<AuthGateProps> = ({ onAuthenticated }) => {
+export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
   const [systems, setSystems] = useState<PublicSystemItem[]>([]);
   const [idps, setIdps] = useState<PublicIdpItem[]>([]);
   const [selectedSlug, setSelectedSlug] = useState('secure-gate');
