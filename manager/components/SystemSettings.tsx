@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Bug,
+  ChevronDown,
   Code2,
   Database,
   FileCode2,
@@ -32,7 +33,7 @@ interface SystemSettingsProps {
   onSettingsUpdated?: (settings: PlatformSystemSettings) => void;
 }
 
-type SettingsTab = 'environment' | 'infra' | 'jwt' | 'security' | 'edge' | 'compliance' | 'errors';
+type SettingsTab = 'environment' | 'infra' | 'auth' | 'edge' | 'compliance' | 'errors';
 
 const SYSTEM_SETTINGS_QUERY = `
   query AdminSystemSettings {
@@ -232,15 +233,15 @@ const ENVIRONMENTS: Array<{
 }> = [
   {
     value: 'Desenvolvimento',
-    description: 'Exibe o painel Contas de Demonstração na tela de login e facilita testes locais.',
+    description: 'Exibe o painel "Contas de Demonstração" na tela de login e facilita testes locais.',
   },
   {
     value: 'Homologação',
-    description: 'Ambiente de pré-produção e QA mantendo Contas de Demonstração acessíveis.',
+    description: 'Ambiente de pré-produção e QA mantendo "Contas de Demonstração" acessíveis.',
   },
   {
     value: 'Produção',
-    description: 'Oculta o painel Contas de Demonstração na tela de login e bloqueia atalhos de teste.',
+    description: 'Oculta o painel "Contas de Demonstração" na tela de login e bloqueia atalhos de teste.',
   },
 ];
 
@@ -251,12 +252,111 @@ const TABS: Array<{
 }> = [
   { id: 'environment', label: 'Ambientes', icon: Server },
   { id: 'infra', label: 'Infraestrutura', icon: Code2 },
-  { id: 'jwt', label: 'JWT & OAuth 2.0', icon: KeyRound },
-  { id: 'security', label: 'Segurança & 2FA', icon: Lock },
+  { id: 'auth', label: 'Autorização & Autenticação', icon: Lock },
   { id: 'edge', label: 'Edge Cache & Auditoria', icon: Database },
   { id: 'compliance', label: 'LGPD & Privacidade', icon: ShieldCheck },
   { id: 'errors', label: 'Log de Erros Detalhado', icon: Bug },
 ];
+
+const SEPARATOR_OPTIONS: Array<{ value: '_' | '-'; label: string }> = [
+  { value: '_', label: '_ (Sublinhado)' },
+  { value: '-', label: '- (Hífen)' },
+];
+
+const SIGNING_ALG_OPTIONS: Array<{ value: 'RS256' | 'HS256'; label: string }> = [
+  { value: 'RS256', label: 'RS256 (Assimétrico + JWKS)' },
+  { value: 'HS256', label: 'HS256 (HMAC Compartilhado)' },
+];
+
+interface CompactComboProps<T extends string> {
+  id: string;
+  value: T;
+  options: Array<{ value: T; label: string }>;
+  onChange: (value: T) => void;
+  menuAlign?: 'left' | 'right';
+  menuMinWidthClass?: string;
+  centerValue?: boolean;
+}
+
+function CompactCombo<T extends string>({
+  id,
+  value,
+  options,
+  onChange,
+  menuAlign = 'right',
+  menuMinWidthClass = 'min-w-[156px]',
+  centerValue = false,
+}: CompactComboProps<T>) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handlePointerDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        id={id}
+        type="button"
+        role="combobox"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={() => setOpen((prev) => !prev)}
+        className="w-full flex items-center justify-between gap-1.5 bg-[#090D16] border border-slate-700 hover:border-slate-500 rounded-md px-3 py-2 text-xs font-mono text-white transition-colors"
+      >
+        <span className={`flex-1 ${centerValue ? 'text-center' : 'text-left'}`}>{value}</span>
+        <ChevronDown className={`w-3.5 h-3.5 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <ul
+          role="listbox"
+          aria-labelledby={id}
+          className={`absolute ${
+            menuAlign === 'left' ? 'left-0' : 'right-0'
+          } mt-1.5 z-40 ${menuMinWidthClass} bg-[#090D16] border border-slate-700/90 rounded-md shadow-xl overflow-hidden divide-y divide-slate-800/60`}
+        >
+          {options.map((opt) => {
+            const selected = opt.value === value;
+            return (
+              <li key={opt.value} role="option" aria-selected={selected}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(opt.value);
+                    setOpen(false);
+                  }}
+                  className={`w-full px-3 py-2 text-xs font-mono text-left whitespace-nowrap transition-colors ${
+                    selected
+                      ? 'bg-[#F6821F]/15 text-white'
+                      : 'text-slate-200 hover:bg-slate-800/70'
+                  }`}
+                >
+                  <span>{opt.label}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 export const SystemSettings: React.FC<SystemSettingsProps> = ({
   token,
@@ -392,7 +492,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             globalRequireMfa: draft.globalRequireMfa,
             globalPasswordMinLength: Number(draft.globalPasswordMinLength),
             maxLoginAttempts: Number(draft.maxLoginAttempts),
-            smsOtpTtlSeconds: Number(draft.smsOtpTtlSeconds),
+            smsOtpTtlSeconds: Number(draft.oauthCodeTtlSeconds),
             smsSandboxPreview: draft.smsSandboxPreview,
             jitProvisioningEnabled: draft.jitProvisioningEnabled,
             edgeCacheEnabled: draft.edgeCacheEnabled,
@@ -669,7 +769,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Emissor JWT (iss)</label>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Emissor de Token</label>
                     <input
                       type="text"
                       required
@@ -680,7 +780,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                      URL Base da Aplicação (Callbacks OAuth)
+                      Servidor de Autenticação (Callback)
                     </label>
                     <input
                       type="text"
@@ -708,13 +808,14 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="bg-[#090D16]/60 border border-slate-800/80 rounded-md p-4 space-y-3">
-                  <div className="text-xs font-semibold text-white">Sistema</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  <div className="text-xs font-semibold text-white">Identificador do Sistema</div>
+                  <div className="flex items-end gap-3">
+                    <div className="flex-1 min-w-0">
+                      <label htmlFor="system-id-prefix" className="block text-xs font-medium text-slate-300 mb-1.5">
                         Prefixo
                       </label>
                       <input
+                        id="system-id-prefix"
                         type="text"
                         required
                         value={draft.systemIdPrefix}
@@ -724,39 +825,44 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                             systemIdPrefix: e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''),
                           })
                         }
-                        placeholder="sys"
+                        placeholder="system"
                         className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
                       />
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                        Normalização
+                    <div className="w-20 shrink-0">
+                      <label htmlFor="system-id-separator" className="block text-xs font-medium text-slate-300 mb-1.5">
+                        Separador
                       </label>
-                      <select
+                      <CompactCombo
+                        id="system-id-separator"
                         value={draft.systemIdSeparator}
-                        onChange={(e) =>
-                          setDraft({
-                            ...draft,
-                            systemIdSeparator: e.target.value === '-' ? '-' : '_',
-                          })
-                        }
-                        className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
-                      >
-                        <option value="_">_ (underscore)</option>
-                        <option value="-">- (hífen)</option>
-                      </select>
+                        options={SEPARATOR_OPTIONS}
+                        centerValue
+                        onChange={(val) => setDraft({ ...draft, systemIdSeparator: val })}
+                      />
                     </div>
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-400">
+                    Exemplo:{' '}
+                    <span className="text-slate-200">
+                      {(draft.systemIdPrefix || 'system').replace(/[-_]+$/g, '')}
+                      {draft.systemIdSeparator}
+                      {draft.normalizeIdentifiers
+                        ? `portal${draft.systemIdSeparator}parceiros`
+                        : 'portal-parceiros'}
+                    </span>
                   </div>
                 </div>
 
                 <div className="bg-[#090D16]/60 border border-slate-800/80 rounded-md p-4 space-y-3">
-                  <div className="text-xs font-semibold text-white">Cliente</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  <div className="text-xs font-semibold text-white">Identificador do Cliente</div>
+                  <div className="flex items-end gap-3">
+                    <div className="flex-1 min-w-0">
+                      <label htmlFor="client-id-prefix" className="block text-xs font-medium text-slate-300 mb-1.5">
                         Prefixo
                       </label>
                       <input
+                        id="client-id-prefix"
                         type="text"
                         required
                         value={draft.clientIdPrefix}
@@ -766,33 +872,37 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                             clientIdPrefix: e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''),
                           })
                         }
-                        placeholder="cli"
+                        placeholder="client"
                         className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
                       />
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                        Normalização
+                    <div className="w-20 shrink-0">
+                      <label htmlFor="client-id-separator" className="block text-xs font-medium text-slate-300 mb-1.5">
+                        Separador
                       </label>
-                      <select
+                      <CompactCombo
+                        id="client-id-separator"
                         value={draft.clientIdSeparator}
-                        onChange={(e) =>
-                          setDraft({
-                            ...draft,
-                            clientIdSeparator: e.target.value === '-' ? '-' : '_',
-                          })
-                        }
-                        className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
-                      >
-                        <option value="_">_ (underscore)</option>
-                        <option value="-">- (hífen)</option>
-                      </select>
+                        options={SEPARATOR_OPTIONS}
+                        centerValue
+                        onChange={(val) => setDraft({ ...draft, clientIdSeparator: val })}
+                      />
                     </div>
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-400">
+                    Exemplo:{' '}
+                    <span className="text-slate-200">
+                      {(draft.clientIdPrefix || 'client').replace(/[-_]+$/g, '')}
+                      {draft.clientIdSeparator}
+                      {draft.normalizeIdentifiers
+                        ? `portal${draft.clientIdSeparator}parceiros`
+                        : 'portal-parceiros'}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-slate-800/80">
+              <div className="pt-2 border-t border-slate-800/80">
                 <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
                   <input
                     type="checkbox"
@@ -801,27 +911,9 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     className="rounded border-slate-700 bg-[#090D16]"
                   />
                   <span>
-                    Normalizar valores (substituir caracteres inválidos e separadores pelo caracter de cada campo)
+                    Normalizar valores (substituir caracteres inválidos pelo separador do campo)
                   </span>
                 </label>
-                <div className="text-[11px] font-mono text-slate-400">
-                  Exemplo:{' '}
-                  <span className="text-slate-200">
-                    {(draft.systemIdPrefix || 'sys').replace(/[-_]+$/g, '')}
-                    {draft.systemIdSeparator}
-                    {draft.normalizeIdentifiers
-                      ? `portal${draft.systemIdSeparator}parceiros`
-                      : 'portal-parceiros'}
-                  </span>{' '}
-                  ·{' '}
-                  <span className="text-slate-200">
-                    {(draft.clientIdPrefix || 'cli').replace(/[-_]+$/g, '')}
-                    {draft.clientIdSeparator}
-                    {draft.normalizeIdentifiers
-                      ? `portal${draft.clientIdSeparator}parceiros`
-                      : 'portal-parceiros'}
-                  </span>
-                </div>
               </div>
             </section>
           )}
@@ -1122,180 +1214,263 @@ $ npx wrangler d1 execute ${draft.infraD1DatabaseName || 'isg-d1'} --remote --fi
             </>
           )}
 
-          {/* 2. Tokens JWT & OAuth 2.0 */}
-          {activeTab === 'jwt' && (
-            <section className="bg-[#111827] border border-slate-800/90 rounded-lg p-6 space-y-5">
-              <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
-                <KeyRound className="w-4 h-4 text-[#F6821F]" />
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-semibold text-white">Tokens JWT, Sessão e OAuth 2.0</h2>
-                  <InfoTooltip text="Valores padrão aplicados a novos sistemas e janelas temporais de autorização na borda." />
+          {/* 2. Autorização & Autenticação */}
+          {activeTab === 'auth' && (
+            <>
+              <section className="bg-[#111827] border border-slate-800/90 rounded-lg p-6 space-y-5">
+                <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                  <KeyRound className="w-4 h-4 text-[#F6821F]" />
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-white">Tokens e Sessão</h2>
+                    <InfoTooltip text="Define os parâmetros padrão de assinatura criptográfica, fluxo OAuth 2.0 (PKCE) e prazos de expiração de tokens JWT, sessão e códigos de validação." />
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                    TTL Padrão do JWT (segundos)
-                  </label>
-                  <input
-                    type="number"
-                    min={60}
-                    max={86400}
-                    required
-                    value={draft.defaultJwtTtlSeconds}
-                    onChange={(e) => setDraft({ ...draft, defaultJwtTtlSeconds: Number(e.target.value) })}
-                    className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
-                  />
+                <div className="bg-[#090D16]/60 border border-slate-800/80 rounded-md p-4 space-y-3">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-white">Assinatura e Fluxo OAuth 2.0</span>
+                    <InfoTooltip text="Configura o algoritmo padrão de assinatura de tokens JWT para novos sistemas e a exigência do fluxo PKCE S256 na autorização." />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <label htmlFor="default-signing-alg" className="block text-xs font-medium text-slate-300">
+                          Algorítimo de Assinatura
+                        </label>
+                        <InfoTooltip text="Algoritmo criptográfico padrão aplicado a novos sistemas para assinar tokens JWT (RS256 com chave assimétrica e JWKS público, ou HS256 com segredo HMAC compartilhado)." />
+                      </div>
+                      <CompactCombo
+                        id="default-signing-alg"
+                        value={draft.defaultSigningAlg}
+                        options={SIGNING_ALG_OPTIONS}
+                        menuAlign="left"
+                        menuMinWidthClass="min-w-[230px]"
+                        onChange={(val) => setDraft({ ...draft, defaultSigningAlg: val })}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 h-[34px]">
+                      <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={draft.pkceRequired}
+                          onChange={(e) => setDraft({ ...draft, pkceRequired: e.target.checked })}
+                          className="rounded border-slate-700 bg-[#090D16]"
+                        />
+                        <span>Exigir PKCE S256 na autorização</span>
+                      </label>
+                      <InfoTooltip
+                        align="right"
+                        text="Quando habilitado, exige o envio de code_challenge com método S256 (SHA-256) nas chamadas de autorização e validação do code_verifier na troca pelo token, protegendo contra interceptação do código."
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Algoritmo JWT Padrão</label>
-                  <select
-                    value={draft.defaultSigningAlg}
-                    onChange={(e) => setDraft({ ...draft, defaultSigningAlg: e.target.value as 'RS256' | 'HS256' })}
-                    className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs text-white"
-                  >
-                    <option value="RS256">RS256 (Assimétrico + JWKS)</option>
-                    <option value="HS256">HS256 (HMAC Compartilhado)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                    Alerta Expiração Sessão (seg)
-                  </label>
-                  <input
-                    type="number"
-                    min={30}
-                    max={1800}
-                    required
-                    value={draft.sessionWarningSeconds}
-                    onChange={(e) => setDraft({ ...draft, sessionWarningSeconds: Number(e.target.value) })}
-                    className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                    Validade Auth Code / 2FA (seg)
-                  </label>
-                  <input
-                    type="number"
-                    min={60}
-                    max={1800}
-                    required
-                    value={draft.oauthCodeTtlSeconds}
-                    onChange={(e) => setDraft({ ...draft, oauthCodeTtlSeconds: Number(e.target.value) })}
-                    className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
-                  />
-                </div>
-              </div>
 
-              <div className="pt-2 border-t border-slate-800/80">
-                <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.pkceRequired}
-                    onChange={(e) => setDraft({ ...draft, pkceRequired: e.target.checked })}
-                    className="rounded border-slate-700 bg-[#090D16]"
-                  />
-                  <span>Exigir PKCE S256 obrigatório em todas as chamadas de /api/oauth/authorize</span>
-                </label>
-              </div>
-            </section>
-          )}
+                <div className="bg-[#090D16]/60 border border-slate-800/80 rounded-md p-4 space-y-3">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-white">Tempos de Expiração</span>
+                    <InfoTooltip text="Define os prazos de validade em segundos para tokens JWT, aviso antecipado de sessão e códigos temporários de validação (OAuth 2.0, 2FA e SMS OTP)." />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <label htmlFor="default-jwt-ttl" className="block text-xs font-medium text-slate-300">
+                          Expiração do Token
+                        </label>
+                        <InfoTooltip text="Tempo de vida padrão (em segundos, de 60 a 86400) antes de o token JWT expirar e exigir nova autenticação ou renovação." />
+                      </div>
+                      <input
+                        id="default-jwt-ttl"
+                        type="number"
+                        min={60}
+                        max={86400}
+                        required
+                        value={draft.defaultJwtTtlSeconds}
+                        onChange={(e) => setDraft({ ...draft, defaultJwtTtlSeconds: Number(e.target.value) })}
+                        className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <label htmlFor="session-warning-seconds" className="block text-xs font-medium text-slate-300">
+                          Expiração da Sessão
+                        </label>
+                        <InfoTooltip text="Antecedência (em segundos, de 30 a 1800) antes do vencimento do token em que o sistema exibe o aviso de expiração iminente da sessão ao usuário." />
+                      </div>
+                      <input
+                        id="session-warning-seconds"
+                        type="number"
+                        min={30}
+                        max={1800}
+                        required
+                        value={draft.sessionWarningSeconds}
+                        onChange={(e) => setDraft({ ...draft, sessionWarningSeconds: Number(e.target.value) })}
+                        className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <label htmlFor="oauth-code-ttl" className="block text-xs font-medium text-slate-300">
+                          Expiração de Validação
+                        </label>
+                        <InfoTooltip
+                          align="right"
+                          text="Prazo de validade (em segundos, de 60 a 1800) para códigos de autorização OAuth 2.0, desafios temporários de segundo fator (2FA) e códigos SMS OTP."
+                        />
+                      </div>
+                      <input
+                        id="oauth-code-ttl"
+                        type="number"
+                        min={60}
+                        max={1800}
+                        required
+                        value={draft.oauthCodeTtlSeconds}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          setDraft({ ...draft, oauthCodeTtlSeconds: val, smsOtpTtlSeconds: val });
+                        }}
+                        className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </section>
 
-          {/* 3. Segurança, Autenticação & 2FA */}
-          {activeTab === 'security' && (
-            <section className="bg-[#111827] border border-slate-800/90 rounded-lg p-6 space-y-5">
-              <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
-                <Lock className="w-4 h-4 text-[#F6821F]" />
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-semibold text-white">Segurança, Autenticação e Segundo Fator (2FA)</h2>
-                  <InfoTooltip text="Regras globais de senha, bloqueio contra força bruta, auto-registro, TOTP/SMS e federação JIT." />
+              <section className="bg-[#111827] border border-slate-800/90 rounded-lg p-6 space-y-5">
+                <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                  <Lock className="w-4 h-4 text-[#F6821F]" />
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-white">Segurança, Autenticação e Segundo Fator (2FA)</h2>
+                    <InfoTooltip text="Define políticas globais de senha e proteção contra força bruta, regras de segundo fator (2FA/SMS OTP), provisionamento JIT e auto-registro." />
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                    Tamanho Mínimo Global de Senha
-                  </label>
-                  <input
-                    type="number"
-                    min={6}
-                    max={64}
-                    required
-                    value={draft.globalPasswordMinLength}
-                    onChange={(e) => setDraft({ ...draft, globalPasswordMinLength: Number(e.target.value) })}
-                    className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
-                  />
+                <div className="bg-[#090D16]/60 border border-slate-800/80 rounded-md p-4 space-y-3">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-white">Política de Autenticação</span>
+                    <InfoTooltip text="Regras aplicadas às credenciais de acesso para exigir tamanho mínimo de senha e limitar tentativas falhas consecutivas." />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <label htmlFor="global-password-min-length" className="block text-xs font-medium text-slate-300">
+                          Tamanho de Senha
+                        </label>
+                        <InfoTooltip text="Quantidade mínima de caracteres (de 6 a 64) exigida na criação ou redefinição de senhas de usuários na plataforma." />
+                      </div>
+                      <input
+                        id="global-password-min-length"
+                        type="number"
+                        min={6}
+                        max={64}
+                        required
+                        value={draft.globalPasswordMinLength}
+                        onChange={(e) => setDraft({ ...draft, globalPasswordMinLength: Number(e.target.value) })}
+                        className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
+                      />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <label htmlFor="max-login-attempts" className="block text-xs font-medium text-slate-300">
+                          Máximo de Falhas
+                        </label>
+                        <InfoTooltip
+                          align="right"
+                          text="Número máximo de tentativas de login inválidas (de 3 a 50) em uma janela de 5 minutos antes do bloqueio temporário por proteção contra força bruta."
+                        />
+                      </div>
+                      <input
+                        id="max-login-attempts"
+                        type="number"
+                        min={3}
+                        max={50}
+                        required
+                        value={draft.maxLoginAttempts}
+                        onChange={(e) => setDraft({ ...draft, maxLoginAttempts: Number(e.target.value) })}
+                        className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                    Máximo de Tentativas Falhas (5 min)
-                  </label>
-                  <input
-                    type="number"
-                    min={3}
-                    max={50}
-                    required
-                    value={draft.maxLoginAttempts}
-                    onChange={(e) => setDraft({ ...draft, maxLoginAttempts: Number(e.target.value) })}
-                    className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-300 mb-1.5">Validade do SMS OTP (seg)</label>
-                  <input
-                    type="number"
-                    min={60}
-                    max={900}
-                    required
-                    value={draft.smsOtpTtlSeconds}
-                    onChange={(e) => setDraft({ ...draft, smsOtpTtlSeconds: Number(e.target.value) })}
-                    className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
-                <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.globalRequireMfa}
-                    onChange={(e) => setDraft({ ...draft, globalRequireMfa: e.target.checked })}
-                    className="rounded border-slate-700 bg-[#090D16]"
-                  />
-                  <span>Exigir 2FA globalmente em todos os sistemas cadastrados</span>
-                </label>
-                <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.jitProvisioningEnabled}
-                    onChange={(e) => setDraft({ ...draft, jitProvisioningEnabled: e.target.checked })}
-                    className="rounded border-slate-700 bg-[#090D16]"
-                  />
-                  <span>Habilitar provisionamento JIT automático para provedores externos</span>
-                </label>
-                <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.smsSandboxPreview}
-                    onChange={(e) => setDraft({ ...draft, smsSandboxPreview: e.target.checked })}
-                    className="rounded border-slate-700 bg-[#090D16]"
-                  />
-                  <span>Retornar preview sandbox do código SMS OTP na resposta da API</span>
-                </label>
-                <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={draft.allowSelfRegistration}
-                    onChange={(e) => setDraft({ ...draft, allowSelfRegistration: e.target.checked })}
-                    className="rounded border-slate-700 bg-[#090D16]"
-                  />
-                  <span>Permitir auto-registro via API /api/auth/register (padrão bloqueado)</span>
-                </label>
-              </div>
-            </section>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="bg-[#090D16]/60 border border-slate-800/80 rounded-md p-4 space-y-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-semibold text-white">Segundo Fator (2FA) e SMS OTP</span>
+                      <InfoTooltip text="Controla a exigência global de autenticação em dois fatores nos sistemas e o retorno em sandbox do código SMS OTP." />
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={draft.globalRequireMfa}
+                            onChange={(e) => setDraft({ ...draft, globalRequireMfa: e.target.checked })}
+                            className="rounded border-slate-700 bg-[#090D16]"
+                          />
+                          <span>Exigir 2FA globalmente em todos os sistemas cadastrados</span>
+                        </label>
+                        <InfoTooltip text="Quando ativado, impõe a autenticação em dois fatores (TOTP ou SMS) em todos os sistemas da plataforma, mesmo naqueles em que o 2FA esteja marcado como opcional." />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={draft.smsSandboxPreview}
+                            onChange={(e) => setDraft({ ...draft, smsSandboxPreview: e.target.checked })}
+                            className="rounded border-slate-700 bg-[#090D16]"
+                          />
+                          <span>Retornar preview sandbox do código SMS OTP na resposta da API</span>
+                        </label>
+                        <InfoTooltip text="Inclui o código SMS OTP gerado diretamente na resposta JSON da API para facilitar testes e homologação quando não houver envio real de SMS." />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#090D16]/60 border border-slate-800/80 rounded-md p-4 space-y-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-semibold text-white">Provisionamento de Usuários</span>
+                      <InfoTooltip
+                        align="right"
+                        text="Define como novos usuários podem ingressar na plataforma via provedores de identidade externos (JIT) ou auto-registro pela API."
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={draft.jitProvisioningEnabled}
+                            onChange={(e) => setDraft({ ...draft, jitProvisioningEnabled: e.target.checked })}
+                            className="rounded border-slate-700 bg-[#090D16]"
+                          />
+                          <span>Habilitar provisionamento para provedores externos</span>
+                        </label>
+                        <InfoTooltip
+                          align="right"
+                          text="Cria ou atualiza automaticamente o usuário e seus vínculos no primeiro acesso via provedor de identidade externo (OAuth/OIDC/SAML)."
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={draft.allowSelfRegistration}
+                            onChange={(e) => setDraft({ ...draft, allowSelfRegistration: e.target.checked })}
+                            className="rounded border-slate-700 bg-[#090D16]"
+                          />
+                          <span>Permitir auto-registro de usuários</span>
+                        </label>
+                        <InfoTooltip
+                          align="right"
+                          text="Habilita o cadastro autônomo de novas contas através do endpoint público /api/auth/register; mantenha desativado para restringir a criação de usuários a administradores."
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </>
           )}
 
           {/* 4. Edge Cache, SQLite WAL & Auditoria */}

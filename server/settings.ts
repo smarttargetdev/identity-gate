@@ -83,10 +83,10 @@ const DEFAULT_SETTINGS: PlatformSettings = {
   requireExplicitConsent: true,
   allowDataPortabilityExport: true,
   allowSelfErasure: true,
-  systemIdPrefix: 'sys',
-  clientIdPrefix: 'cli',
+  systemIdPrefix: 'system',
+  clientIdPrefix: 'client',
   normalizeIdentifiers: true,
-  systemIdSeparator: '_',
+  systemIdSeparator: '-',
   clientIdSeparator: '_',
   infraWorkerName: 'isg-edge-worker',
   infraAccountId: '',
@@ -147,6 +147,12 @@ function sanitizePlainValue(val: unknown): string {
 
 function normalizeSettings(raw: Partial<PlatformSettings>, updatedBy = 'system'): PlatformSettings {
   const env = sanitizeEnvironment(raw.executionEnvironment ?? DEFAULT_SETTINGS.executionEnvironment);
+  const validationCodeTtl = clampInt(
+    raw.oauthCodeTtlSeconds ?? raw.smsOtpTtlSeconds,
+    DEFAULT_SETTINGS.oauthCodeTtlSeconds,
+    60,
+    1800
+  );
   return {
     executionEnvironment: env,
     platformName: String(raw.platformName ?? DEFAULT_SETTINGS.platformName).trim() || 'Identity Secure Gate',
@@ -155,13 +161,13 @@ function normalizeSettings(raw: Partial<PlatformSettings>, updatedBy = 'system')
     defaultJwtTtlSeconds: clampInt(raw.defaultJwtTtlSeconds, DEFAULT_SETTINGS.defaultJwtTtlSeconds, 60, 86400),
     defaultSigningAlg: raw.defaultSigningAlg === 'HS256' ? 'HS256' : 'RS256',
     sessionWarningSeconds: clampInt(raw.sessionWarningSeconds, DEFAULT_SETTINGS.sessionWarningSeconds, 30, 1800),
-    oauthCodeTtlSeconds: clampInt(raw.oauthCodeTtlSeconds, DEFAULT_SETTINGS.oauthCodeTtlSeconds, 60, 1800),
+    oauthCodeTtlSeconds: validationCodeTtl,
     pkceRequired: Boolean(raw.pkceRequired ?? DEFAULT_SETTINGS.pkceRequired),
     allowSelfRegistration: Boolean(raw.allowSelfRegistration ?? DEFAULT_SETTINGS.allowSelfRegistration),
     globalRequireMfa: Boolean(raw.globalRequireMfa ?? DEFAULT_SETTINGS.globalRequireMfa),
     globalPasswordMinLength: clampInt(raw.globalPasswordMinLength, DEFAULT_SETTINGS.globalPasswordMinLength, 6, 64),
     maxLoginAttempts: clampInt(raw.maxLoginAttempts, DEFAULT_SETTINGS.maxLoginAttempts, 3, 50),
-    smsOtpTtlSeconds: clampInt(raw.smsOtpTtlSeconds, DEFAULT_SETTINGS.smsOtpTtlSeconds, 60, 900),
+    smsOtpTtlSeconds: validationCodeTtl,
     smsSandboxPreview: Boolean(raw.smsSandboxPreview ?? DEFAULT_SETTINGS.smsSandboxPreview),
     jitProvisioningEnabled: Boolean(raw.jitProvisioningEnabled ?? DEFAULT_SETTINGS.jitProvisioningEnabled),
     edgeCacheEnabled: Boolean(raw.edgeCacheEnabled ?? DEFAULT_SETTINGS.edgeCacheEnabled),
@@ -186,9 +192,17 @@ function normalizeSettings(raw: Partial<PlatformSettings>, updatedBy = 'system')
         .replace(/[^a-zA-Z0-9_-]/g, '') || DEFAULT_SETTINGS.clientIdPrefix,
     normalizeIdentifiers: Boolean(raw.normalizeIdentifiers ?? DEFAULT_SETTINGS.normalizeIdentifiers),
     systemIdSeparator:
-      (raw.systemIdSeparator ?? (raw as Record<string, unknown>).identifierSeparator) === '-' ? '-' : '_',
+      (raw.systemIdSeparator ??
+        (raw as Record<string, unknown>).identifierSeparator ??
+        DEFAULT_SETTINGS.systemIdSeparator) === '_'
+        ? '_'
+        : '-',
     clientIdSeparator:
-      (raw.clientIdSeparator ?? (raw as Record<string, unknown>).identifierSeparator) === '-' ? '-' : '_',
+      (raw.clientIdSeparator ??
+        (raw as Record<string, unknown>).identifierSeparator ??
+        DEFAULT_SETTINGS.clientIdSeparator) === '-'
+        ? '-'
+        : '_',
     infraWorkerName: sanitizeSlugToken(
       raw.infraWorkerName ?? DEFAULT_SETTINGS.infraWorkerName,
       DEFAULT_SETTINGS.infraWorkerName
@@ -258,6 +272,18 @@ function ensureInitialSettingsSeeded(): PlatformSettings {
       parsed.jwtIssuer === 'https://smarties-secure-gate.edge.local'
     ) {
       parsed.jwtIssuer = 'https://isg.edge.local';
+      migrated = true;
+    }
+    if (
+      parsed.systemIdPrefix === 'sys' &&
+      parsed.clientIdPrefix === 'cli' &&
+      parsed.systemIdSeparator === '_' &&
+      parsed.clientIdSeparator === '_'
+    ) {
+      parsed.systemIdPrefix = 'system';
+      parsed.clientIdPrefix = 'client';
+      parsed.systemIdSeparator = '-';
+      parsed.clientIdSeparator = '_';
       migrated = true;
     }
     const normalized = normalizeSettings({ ...parsed, updatedAt: row.updated_at, updatedBy: row.updated_by });

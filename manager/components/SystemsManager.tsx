@@ -50,10 +50,10 @@ export const SystemsManager: React.FC<SystemsManagerProps> = ({
   token,
   canWriteSystems = false,
   identifierConfig = {
-    systemIdPrefix: 'sys',
-    clientIdPrefix: 'cli',
+    systemIdPrefix: 'system',
+    clientIdPrefix: 'client',
     normalizeIdentifiers: true,
-    systemIdSeparator: '_',
+    systemIdSeparator: '-',
     clientIdSeparator: '_',
   },
   onNotify,
@@ -137,8 +137,8 @@ export const SystemsManager: React.FC<SystemsManagerProps> = ({
       ? val.trim().replace(/[^a-zA-Z0-9]+/g, sep).replace(new RegExp(`^[${sep}]+|[${sep}]+$`, 'g'), '')
       : val.trim().replace(/[^a-zA-Z0-9_-]/g, '');
 
-  const cleanSysPrefix = formatToken(identifierConfig.systemIdPrefix, sysSep).replace(/[-_]+$/g, '') || 'sys';
-  const cleanCliPrefix = formatToken(identifierConfig.clientIdPrefix, cliSep).replace(/[-_]+$/g, '') || 'cli';
+  const cleanSysPrefix = formatToken(identifierConfig.systemIdPrefix, sysSep).replace(/[-_]+$/g, '') || 'system';
+  const cleanCliPrefix = formatToken(identifierConfig.clientIdPrefix, cliSep).replace(/[-_]+$/g, '') || 'client';
   const sysSlugPart = formatToken(slug, sysSep).replace(/^[-_]+/g, '');
   const cliSlugPart = formatToken(slug, cliSep).replace(/^[-_]+/g, '');
   const systemIdentity = editing
