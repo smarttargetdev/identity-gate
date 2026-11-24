@@ -13,6 +13,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Shield, KeyRound, Smartphone, Lock, ArrowRight, Globe, AlertCircle, CheckCircle2, ChevronDown, X, Check } from 'lucide-react';
 import type { AuthSessionState, ExecutionEnvironment, PublicPlatformConfig } from '../types/Identity';
 import { BrandHeaderLogo } from './BrandHeaderLogo';
+import { VersionBadge } from './VersionBadge';
 
 interface PublicSystemItem {
   id: string;
@@ -881,8 +882,11 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
         </div>
       )}
 
-      <footer className="w-full px-6 py-4 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-500">
-        <span>{platformName}</span>
+      <footer className="w-full px-6 py-4 border-t border-slate-800/60 flex items-center justify-between gap-4 text-xs text-slate-500">
+        <div className="flex items-center gap-3">
+          <span>{platformName}</span>
+          <VersionBadge />
+        </div>
         <span>© 2026, Smart Target</span>
       </footer>
     </div>

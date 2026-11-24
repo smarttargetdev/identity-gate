@@ -53,6 +53,7 @@ import { SystemSettings } from './components/SystemSettings';
 import { TokenGate } from './components/TokenGate';
 import { LatencySparkline } from './components/LatencySparkline';
 import { BrandHeaderLogo } from './components/BrandHeaderLogo';
+import { VersionBadge } from './components/VersionBadge';
 import { subscribeDiagnostics } from './lib/graphqlClient';
 import { playHealthAlertSound, unlockHealthAlertAudio } from './lib/healthAlertAudio';
 import { useSessionExpiration } from './hooks/useSessionExpiration';
@@ -1001,6 +1002,14 @@ export default function Application() {
             />
           )}
         </main>
+
+        <footer className="w-full px-6 py-3.5 border-t border-slate-800/60 flex items-center justify-between gap-4 text-xs text-slate-500">
+          <div className="flex items-center gap-3">
+            <span>{platformName}</span>
+            <VersionBadge />
+          </div>
+          <span>© 2026, Smart Target</span>
+        </footer>
       </div>
 
       {/* Subtle Non-Intrusive Session Expiration Modal Warning (5 min before expiry) */}

@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import type { ExecutionEnvironment, PublicPlatformConfig } from '../types/Identity';
 import { BrandHeaderLogo } from './BrandHeaderLogo';
+import { VersionBadge } from './VersionBadge';
 
 interface PublicSystemItem {
   id: string;
@@ -1023,8 +1024,11 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
           <div className="max-w-2xl w-full mx-auto">{authCard}</div>
         </main>
 
-        <footer className="w-full px-6 py-4 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-500">
-          <span>{platformName} · Portal Autônomo de Token JWT</span>
+        <footer className="w-full px-6 py-4 border-t border-slate-800/60 flex items-center justify-between gap-4 text-xs text-slate-500">
+          <div className="flex items-center gap-3">
+            <span>{platformName} · Portal Autônomo de Token JWT</span>
+            <VersionBadge />
+          </div>
           <span>© 2026, Smart Target</span>
         </footer>
       </div>
