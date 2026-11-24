@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Shield, KeyRound, Smartphone, Lock, ArrowRight, Globe, AlertCircle, CheckCircle2, ChevronDown, X, Check } from 'lucide-react';
 import type { AuthSessionState, ExecutionEnvironment, PublicPlatformConfig } from '../types/iam';
+import { BrandHeaderLogo } from './BrandHeaderLogo';
 
 interface PublicSystemItem {
   id: string;
@@ -395,18 +396,9 @@ export const AuthGate: React.FC<AuthGateProps> = ({ onAuthenticated }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#090D16] text-slate-100 flex flex-col justify-between px-6 py-8">
-      <header className="max-w-6xl w-full mx-auto flex items-center justify-between gap-8 pb-6 border-b border-slate-800/80">
-        <div className="flex items-center gap-3 whitespace-nowrap shrink-0">
-          <img
-            src="https://assets.smarttarget.com.br/company/target.svg"
-            alt={platformName}
-            className="w-8 h-8 object-contain shrink-0"
-          />
-          <span className="font-display text-lg font-semibold tracking-tight text-white">
-            {platformName}
-          </span>
-        </div>
+    <div className="min-h-screen bg-[#090D16] text-slate-100 flex flex-col justify-between">
+      <header className="min-h-14 py-1.5 px-6 border-b border-slate-800/80 bg-[#090D16] flex items-center justify-between gap-6 shrink-0">
+        <BrandHeaderLogo platformName={platformName} />
         <div className="hidden sm:flex items-center gap-3 text-xs text-slate-400">
           <span>OAuth 2.0 / OIDC</span>
           <span aria-hidden="true">·</span>
@@ -424,7 +416,8 @@ export const AuthGate: React.FC<AuthGateProps> = ({ onAuthenticated }) => {
         </div>
       </header>
 
-      <main className="max-w-xl w-full mx-auto my-auto py-10">
+      <main className="w-full px-6 my-auto py-10">
+        <div className="max-w-xl w-full mx-auto">
         {/* Unified Identidade Digital Panel */}
         <div className="w-full bg-[#111827] border border-slate-800/90 rounded-lg p-7 sm:p-8 space-y-6">
           {!mfaPending ? (
@@ -827,6 +820,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({ onAuthenticated }) => {
             </div>
           )}
         </div>
+        </div>
       </main>
 
       {/* External IdP Simulation Modal */}
@@ -893,7 +887,7 @@ export const AuthGate: React.FC<AuthGateProps> = ({ onAuthenticated }) => {
         </div>
       )}
 
-      <footer className="max-w-6xl w-full mx-auto pt-4 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-500">
+      <footer className="w-full px-6 py-4 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-500">
         <span>{platformName}</span>
         <span>© 2026, Smart Target</span>
       </footer>

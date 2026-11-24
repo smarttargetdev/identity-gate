@@ -1226,112 +1226,100 @@ $ npx wrangler d1 execute ${draft.infraD1DatabaseName || 'isg-d1'} --remote --fi
                   </div>
                 </div>
 
-                <div className="bg-[#090D16]/60 border border-slate-800/80 rounded-md p-4 space-y-3">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-semibold text-white">Assinatura e Fluxo OAuth 2.0</span>
-                    <InfoTooltip text="Configura o algoritmo padrão de assinatura de tokens JWT para novos sistemas e a exigência do fluxo PKCE S256 na autorização." />
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <label htmlFor="default-signing-alg" className="block text-xs font-medium text-slate-300">
-                          Algorítimo de Assinatura
-                        </label>
-                        <InfoTooltip text="Algoritmo criptográfico padrão aplicado a novos sistemas para assinar tokens JWT (RS256 com chave assimétrica e JWKS público, ou HS256 com segredo HMAC compartilhado)." />
-                      </div>
-                      <CompactCombo
-                        id="default-signing-alg"
-                        value={draft.defaultSigningAlg}
-                        options={SIGNING_ALG_OPTIONS}
-                        menuAlign="left"
-                        menuMinWidthClass="min-w-[230px]"
-                        onChange={(val) => setDraft({ ...draft, defaultSigningAlg: val })}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2 h-[34px]">
-                      <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={draft.pkceRequired}
-                          onChange={(e) => setDraft({ ...draft, pkceRequired: e.target.checked })}
-                          className="rounded border-slate-700 bg-[#090D16]"
-                        />
-                        <span>Exigir PKCE S256 na autorização</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <label htmlFor="default-signing-alg" className="block text-xs font-medium text-slate-300">
+                        Algorítimo de Assinatura
                       </label>
-                      <InfoTooltip
-                        align="right"
-                        text="Quando habilitado, exige o envio de code_challenge com método S256 (SHA-256) nas chamadas de autorização e validação do code_verifier na troca pelo token, protegendo contra interceptação do código."
-                      />
+                      <InfoTooltip text="Algoritmo criptográfico padrão aplicado a novos sistemas para assinar tokens JWT (RS256 com chave assimétrica e JWKS público, ou HS256 com segredo HMAC compartilhado)." />
                     </div>
+                    <CompactCombo
+                      id="default-signing-alg"
+                      value={draft.defaultSigningAlg}
+                      options={SIGNING_ALG_OPTIONS}
+                      menuAlign="left"
+                      menuMinWidthClass="min-w-[230px]"
+                      onChange={(val) => setDraft({ ...draft, defaultSigningAlg: val })}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 h-[34px]">
+                    <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={draft.pkceRequired}
+                        onChange={(e) => setDraft({ ...draft, pkceRequired: e.target.checked })}
+                        className="rounded border-slate-700 bg-[#090D16]"
+                      />
+                      <span>Exigir PKCE S256 na autorização</span>
+                    </label>
+                    <InfoTooltip
+                      align="right"
+                      text="Quando habilitado, exige o envio de code_challenge com método S256 (SHA-256) nas chamadas de autorização e validação do code_verifier na troca pelo token, protegendo contra interceptação do código."
+                    />
                   </div>
                 </div>
 
-                <div className="bg-[#090D16]/60 border border-slate-800/80 rounded-md p-4 space-y-3">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-semibold text-white">Tempos de Expiração</span>
-                    <InfoTooltip text="Define os prazos de validade em segundos para tokens JWT, aviso antecipado de sessão e códigos temporários de validação (OAuth 2.0, 2FA e SMS OTP)." />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-800/80">
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <label htmlFor="default-jwt-ttl" className="block text-xs font-medium text-slate-300">
+                        Expiração do Token
+                      </label>
+                      <InfoTooltip text="Tempo de vida padrão (em segundos, de 60 a 86400) antes de o token JWT expirar e exigir nova autenticação ou renovação." />
+                    </div>
+                    <input
+                      id="default-jwt-ttl"
+                      type="number"
+                      min={60}
+                      max={86400}
+                      required
+                      value={draft.defaultJwtTtlSeconds}
+                      onChange={(e) => setDraft({ ...draft, defaultJwtTtlSeconds: Number(e.target.value) })}
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
+                    />
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <label htmlFor="default-jwt-ttl" className="block text-xs font-medium text-slate-300">
-                          Expiração do Token
-                        </label>
-                        <InfoTooltip text="Tempo de vida padrão (em segundos, de 60 a 86400) antes de o token JWT expirar e exigir nova autenticação ou renovação." />
-                      </div>
-                      <input
-                        id="default-jwt-ttl"
-                        type="number"
-                        min={60}
-                        max={86400}
-                        required
-                        value={draft.defaultJwtTtlSeconds}
-                        onChange={(e) => setDraft({ ...draft, defaultJwtTtlSeconds: Number(e.target.value) })}
-                        className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <label htmlFor="session-warning-seconds" className="block text-xs font-medium text-slate-300">
+                        Expiração da Sessão
+                      </label>
+                      <InfoTooltip text="Antecedência (em segundos, de 30 a 1800) antes do vencimento do token em que o sistema exibe o aviso de expiração iminente da sessão ao usuário." />
+                    </div>
+                    <input
+                      id="session-warning-seconds"
+                      type="number"
+                      min={30}
+                      max={1800}
+                      required
+                      value={draft.sessionWarningSeconds}
+                      onChange={(e) => setDraft({ ...draft, sessionWarningSeconds: Number(e.target.value) })}
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
+                    />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <label htmlFor="oauth-code-ttl" className="block text-xs font-medium text-slate-300">
+                        Expiração de Validação
+                      </label>
+                      <InfoTooltip
+                        align="right"
+                        text="Prazo de validade (em segundos, de 60 a 1800) para códigos de autorização OAuth 2.0, desafios temporários de segundo fator (2FA) e códigos SMS OTP."
                       />
                     </div>
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <label htmlFor="session-warning-seconds" className="block text-xs font-medium text-slate-300">
-                          Expiração da Sessão
-                        </label>
-                        <InfoTooltip text="Antecedência (em segundos, de 30 a 1800) antes do vencimento do token em que o sistema exibe o aviso de expiração iminente da sessão ao usuário." />
-                      </div>
-                      <input
-                        id="session-warning-seconds"
-                        type="number"
-                        min={30}
-                        max={1800}
-                        required
-                        value={draft.sessionWarningSeconds}
-                        onChange={(e) => setDraft({ ...draft, sessionWarningSeconds: Number(e.target.value) })}
-                        className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
-                      />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <label htmlFor="oauth-code-ttl" className="block text-xs font-medium text-slate-300">
-                          Expiração de Validação
-                        </label>
-                        <InfoTooltip
-                          align="right"
-                          text="Prazo de validade (em segundos, de 60 a 1800) para códigos de autorização OAuth 2.0, desafios temporários de segundo fator (2FA) e códigos SMS OTP."
-                        />
-                      </div>
-                      <input
-                        id="oauth-code-ttl"
-                        type="number"
-                        min={60}
-                        max={1800}
-                        required
-                        value={draft.oauthCodeTtlSeconds}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          setDraft({ ...draft, oauthCodeTtlSeconds: val, smsOtpTtlSeconds: val });
-                        }}
-                        className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
-                      />
-                    </div>
+                    <input
+                      id="oauth-code-ttl"
+                      type="number"
+                      min={60}
+                      max={1800}
+                      required
+                      value={draft.oauthCodeTtlSeconds}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setDraft({ ...draft, oauthCodeTtlSeconds: val, smsOtpTtlSeconds: val });
+                      }}
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
+                    />
                   </div>
                 </div>
               </section>
@@ -1408,7 +1396,7 @@ $ npx wrangler d1 execute ${draft.infraD1DatabaseName || 'isg-d1'} --remote --fi
                             onChange={(e) => setDraft({ ...draft, globalRequireMfa: e.target.checked })}
                             className="rounded border-slate-700 bg-[#090D16]"
                           />
-                          <span>Exigir 2FA globalmente em todos os sistemas cadastrados</span>
+                          <span>Exigir 2FA em todos os sistemas</span>
                         </label>
                         <InfoTooltip text="Quando ativado, impõe a autenticação em dois fatores (TOTP ou SMS) em todos os sistemas da plataforma, mesmo naqueles em que o 2FA esteja marcado como opcional." />
                       </div>
@@ -1420,7 +1408,7 @@ $ npx wrangler d1 execute ${draft.infraD1DatabaseName || 'isg-d1'} --remote --fi
                             onChange={(e) => setDraft({ ...draft, smsSandboxPreview: e.target.checked })}
                             className="rounded border-slate-700 bg-[#090D16]"
                           />
-                          <span>Retornar preview sandbox do código SMS OTP na resposta da API</span>
+                          <span>Simular o código SMS OTP</span>
                         </label>
                         <InfoTooltip text="Inclui o código SMS OTP gerado diretamente na resposta JSON da API para facilitar testes e homologação quando não houver envio real de SMS." />
                       </div>
@@ -1444,7 +1432,7 @@ $ npx wrangler d1 execute ${draft.infraD1DatabaseName || 'isg-d1'} --remote --fi
                             onChange={(e) => setDraft({ ...draft, jitProvisioningEnabled: e.target.checked })}
                             className="rounded border-slate-700 bg-[#090D16]"
                           />
-                          <span>Habilitar provisionamento para provedores externos</span>
+                          <span>Provisionamento para provedores externos</span>
                         </label>
                         <InfoTooltip
                           align="right"

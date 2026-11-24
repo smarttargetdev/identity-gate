@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { UserPlus, Edit3, Trash2, Link2, X } from 'lucide-react';
+import { UserPlus, Edit3, Trash2, Link2, X, Save } from 'lucide-react';
 import { gqlRequest } from '../lib/graphqlClient';
 import { InfoTooltip } from './InfoTooltip';
 import type { IamSystem, IamUser } from '../types/iam';
@@ -259,10 +259,17 @@ export const UsersManager: React.FC<UsersManagerProps> = ({
           <button
             type="button"
             onClick={openCreate}
-            className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold bg-[#F6821F] hover:bg-[#e27316] text-slate-950 rounded-md transition-colors whitespace-nowrap"
+            aria-label="Novo Usuário"
+            title="Novo Usuário"
+            className="relative group flex items-center justify-center p-2 text-xs font-semibold bg-[#F6821F] hover:bg-[#e27316] text-slate-950 rounded-md transition-colors"
           >
-            <UserPlus className="w-3.5 h-3.5" />
-            <span>Novo Usuário</span>
+            <UserPlus className="w-4 h-4" />
+            <span
+              role="tooltip"
+              className="absolute top-full right-0 mt-1.5 z-40 px-2 py-1 rounded-md bg-[#090D16] border border-slate-700/90 text-[11px] font-medium text-slate-200 shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150"
+            >
+              Novo Usuário
+            </span>
           </button>
         )}
       </div>
@@ -523,12 +530,31 @@ export const UsersManager: React.FC<UsersManagerProps> = ({
                     setCreating(false);
                     setEditing(null);
                   }}
-                  className="px-4 py-2 text-xs text-slate-300 border border-slate-700 rounded-md"
+                  aria-label="Cancelar"
+                  title="Cancelar"
+                  className="relative group flex items-center justify-center p-2 text-xs text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-700 rounded-md transition-colors"
                 >
-                  Cancelar
+                  <X className="w-4 h-4" />
+                  <span
+                    role="tooltip"
+                    className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-40 px-2 py-1 rounded-md bg-[#090D16] border border-slate-700/90 text-[11px] font-medium text-slate-200 shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150"
+                  >
+                    Cancelar
+                  </span>
                 </button>
-                <button type="submit" className="px-4 py-2 text-xs font-semibold bg-[#F6821F] text-slate-950 rounded-md">
-                  {editing ? 'Atualizar' : 'Criar Usuário'}
+                <button
+                  type="submit"
+                  aria-label="Salvar"
+                  title="Salvar"
+                  className="relative group flex items-center justify-center p-2 text-xs font-semibold bg-[#F6821F] hover:bg-[#e27316] text-slate-950 rounded-md transition-colors"
+                >
+                  <Save className="w-4 h-4" />
+                  <span
+                    role="tooltip"
+                    className="absolute bottom-full right-0 mb-1.5 z-40 px-2 py-1 rounded-md bg-[#090D16] border border-slate-700/90 text-[11px] font-medium text-slate-200 shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-150"
+                  >
+                    Salvar
+                  </span>
                 </button>
               </div>
             </form>

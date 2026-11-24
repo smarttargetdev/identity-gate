@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import type { ExecutionEnvironment, PublicPlatformConfig } from '../types/iam';
+import { BrandHeaderLogo } from './BrandHeaderLogo';
 
 interface PublicSystemItem {
   id: string;
@@ -153,6 +154,8 @@ export const TokenPortal: React.FC<TokenPortalProps> = ({ standalone = false, on
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [systemDropdownOpen, setSystemDropdownOpen] = useState(false);
+  const systemComboRef = useRef<HTMLDivElement>(null);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const userComboRef = useRef<HTMLDivElement>(null);
   const userInputRef = useRef<HTMLInputElement>(null);
@@ -163,6 +166,9 @@ export const TokenPortal: React.FC<TokenPortalProps> = ({ standalone = false, on
 
   useEffect(() => {
     const handleClickOutside = (ev: MouseEvent) => {
+      if (systemComboRef.current && !systemComboRef.current.contains(ev.target as Node)) {
+        setSystemDropdownOpen(false);
+      }
       if (userComboRef.current && !userComboRef.current.contains(ev.target as Node)) {
         setUserDropdownOpen(false);
       }
@@ -434,9 +440,7 @@ export const TokenPortal: React.FC<TokenPortalProps> = ({ standalone = false, on
       )
     : '';
 
-  const readonlySystemText = currentSystem
-    ? `${currentSystem.name} (${currentSystem.slug})`
-    : lockedSystemParam;
+  const readonlySystemText = currentSystem ? currentSystem.name : lockedSystemParam;
 
   const authCard = (
     <div className="w-full bg-[#111827] border border-slate-800/90 rounded-lg p-6 sm:p-7 space-y-6">
@@ -561,20 +565,20 @@ export const TokenPortal: React.FC<TokenPortalProps> = ({ standalone = false, on
           <div className="space-y-1.5 pb-4 border-b border-slate-800/80">
             <div className="flex items-center gap-2 text-xs font-medium text-[#F6821F]">
               <KeyRound className="w-3.5 h-3.5" />
-              <span>Emissão Direta de Token JWT</span>
+              <span>Controle de Acesso</span>
             </div>
             <h2 className="font-display text-xl font-semibold text-white">
-              Autenticação para Obtenção de Token
+              Validação de Identidade
             </h2>
             <p className="text-xs text-slate-400 leading-relaxed">
               {hasLockedSystem
                 ? 'O sistema de destino foi definido pelos parâmetros da requisição e está bloqueado para alteração.'
-                : 'Selecione o sistema de destino e autentique o usuário para gerar e retornar o token JWT assinado.'}
+                : 'Selecione o sistema e informe as credenciais do usuário para gerar e retornar o token JWT assinado.'}
             </p>
           </div>
 
           <form onSubmit={handleSubmitCredentials} className="space-y-4">
-            <div>
+            <div ref={systemComboRef} className="relative">
               <div className="flex items-center justify-between mb-1.5">
                 <label htmlFor="token-system-field" className="block text-xs font-medium text-slate-300">
                   Sistema
@@ -593,24 +597,70 @@ export const TokenPortal: React.FC<TokenPortalProps> = ({ standalone = false, on
                   type="text"
                   readOnly
                   value={readonlySystemText}
-                  className="w-full bg-[#090D16]/60 border border-slate-800 rounded-md px-3.5 py-2.5 text-sm font-mono text-slate-200 cursor-not-allowed focus:outline-none"
+                  className="w-full bg-[#090D16]/60 border border-slate-800 rounded-md px-3.5 py-2.5 text-sm text-slate-200 cursor-not-allowed focus:outline-none"
                 />
               ) : (
-                <select
-                  id="token-system-field"
-                  value={selectedSlug}
-                  onChange={(e) => {
-                    setSelectedSlug(e.target.value);
-                    setError(null);
-                  }}
-                  className="w-full bg-[#090D16] border border-slate-700/80 rounded-md px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-[#F6821F]"
-                >
-                  {systems.map((sys) => (
-                    <option key={sys.id} value={sys.slug}>
-                      {sys.name} ({sys.slug})
-                    </option>
-                  ))}
-                </select>
+                <>
+                  <button
+                    id="token-system-field"
+                    type="button"
+                    role="combobox"
+                    aria-expanded={systemDropdownOpen}
+                    aria-haspopup="listbox"
+                    aria-controls="token-system-listbox"
+                    onClick={() => setSystemDropdownOpen((prev) => !prev)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') setSystemDropdownOpen(false);
+                    }}
+                    className="w-full flex items-center justify-between gap-2 bg-[#090D16] border border-slate-700/80 hover:border-slate-600 rounded-md px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-[#F6821F] transition-colors text-left"
+                  >
+                    <span className="truncate">
+                      {currentSystem ? currentSystem.name : 'Selecione um sistema'}
+                    </span>
+                    <ChevronDown
+                      className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${
+                        systemDropdownOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {systemDropdownOpen && (
+                    <div
+                      id="token-system-listbox"
+                      role="listbox"
+                      aria-labelledby="token-system-field"
+                      className="absolute z-30 left-0 right-0 mt-1.5 bg-[#090D16] border border-slate-700/90 rounded-md shadow-xl overflow-hidden max-h-60 overflow-y-auto divide-y divide-slate-800/60"
+                    >
+                      {systems.map((sys) => {
+                        const isSelected = sys.slug === selectedSlug;
+                        return (
+                          <button
+                            key={sys.id}
+                            type="button"
+                            role="option"
+                            aria-selected={isSelected}
+                            onClick={() => {
+                              setSelectedSlug(sys.slug);
+                              setError(null);
+                              setSystemDropdownOpen(false);
+                            }}
+                            className={`w-full flex items-center justify-between gap-2 px-3.5 py-2 text-left transition-colors ${
+                              isSelected
+                                ? 'bg-[#F6821F]/15 text-white'
+                                : 'hover:bg-slate-800/60 text-slate-200'
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <div className="text-xs font-medium text-white truncate">{sys.name}</div>
+                              <div className="text-[11px] font-mono text-[#F6821F] truncate">{sys.slug}</div>
+                            </div>
+                            {isSelected && <Check className="w-3.5 h-3.5 text-[#F6821F] shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
@@ -694,7 +744,7 @@ export const TokenPortal: React.FC<TokenPortalProps> = ({ standalone = false, on
                   {showDemoPanel && (
                     <>
                       <div className="px-3 py-1.5 text-[11px] font-medium text-[#F6821F] bg-slate-900/80 border-b border-slate-800/80">
-                        Contas de {executionEnvironment}
+                        Contas de Demonstração
                       </div>
                       <div className="divide-y divide-slate-800/60">
                         {QUICK_ACCOUNTS.map((acc) => {
@@ -883,24 +933,10 @@ export const TokenPortal: React.FC<TokenPortalProps> = ({ standalone = false, on
 
   if (standalone) {
     return (
-      <div className="min-h-screen bg-[#090D16] text-slate-100 flex flex-col justify-between px-6 py-8">
-        <header className="max-w-6xl w-full mx-auto flex items-center justify-between gap-6 pb-6 border-b border-slate-800/80">
-          <div className="flex items-center gap-3 whitespace-nowrap shrink-0">
-            <img
-              src="https://assets.smarttarget.com.br/company/target.svg"
-              alt={platformName}
-              className="w-8 h-8 object-contain shrink-0"
-            />
-            <span className="font-display text-lg font-semibold tracking-tight text-white">
-              {platformName}
-            </span>
-          </div>
+      <div className="min-h-screen bg-[#090D16] text-slate-100 flex flex-col justify-between">
+        <header className="min-h-14 py-1.5 px-6 border-b border-slate-800/80 bg-[#090D16] flex items-center justify-between gap-6 shrink-0">
+          <BrandHeaderLogo platformName={platformName} />
           <div className="flex items-center gap-4 text-xs text-slate-400">
-            {executionEnvironment && (
-              <span className={executionEnvironment === 'Produção' ? 'text-amber-400 font-medium' : 'text-slate-300'}>
-                {executionEnvironment}
-              </span>
-            )}
             <a
               href="/"
               className="px-3 py-1.5 rounded-md bg-[#111827] hover:bg-slate-800 border border-slate-700/80 text-slate-200 transition-colors whitespace-nowrap"
@@ -910,9 +946,11 @@ export const TokenPortal: React.FC<TokenPortalProps> = ({ standalone = false, on
           </div>
         </header>
 
-        <main className="max-w-2xl w-full mx-auto my-auto py-10">{authCard}</main>
+        <main className="w-full px-6 my-auto py-10">
+          <div className="max-w-2xl w-full mx-auto">{authCard}</div>
+        </main>
 
-        <footer className="max-w-6xl w-full mx-auto pt-4 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-500">
+        <footer className="w-full px-6 py-4 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-500">
           <span>{platformName} · Portal Autônomo de Token JWT</span>
           <span>© 2026, Smart Target</span>
         </footer>

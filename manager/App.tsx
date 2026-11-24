@@ -41,6 +41,7 @@ import { ProfileAndCompliance } from './components/ProfileAndCompliance';
 import { SystemSettings } from './components/SystemSettings';
 import { TokenPortal } from './components/TokenPortal';
 import { LatencySparkline } from './components/LatencySparkline';
+import { BrandHeaderLogo } from './components/BrandHeaderLogo';
 import { subscribeDiagnostics } from './lib/graphqlClient';
 import { playHealthAlertSound, unlockHealthAlertAudio } from './lib/healthAlertAudio';
 import { useSessionExpiration } from './hooks/useSessionExpiration';
@@ -381,27 +382,16 @@ export default function App() {
       {!isExpandedView && (
         <aside
           className={`${
-            isSidebarCollapsed ? 'w-16' : 'w-[248px]'
+            isSidebarCollapsed ? 'w-16' : 'w-[280px]'
           } shrink-0 bg-[#0D131F] border-r border-slate-800/80 flex flex-col justify-between transition-all duration-200`}
         >
           <div>
             <div
-              className={`h-14 border-b border-slate-800/80 flex items-center ${
-                isSidebarCollapsed ? 'px-2 justify-center' : 'px-4 justify-between gap-2'
+              className={`min-h-14 py-1.5 border-b border-slate-800/80 bg-[#090D16] flex items-center ${
+                isSidebarCollapsed ? 'px-2 justify-center' : 'px-6 justify-between gap-2'
               }`}
             >
-              {!isSidebarCollapsed && (
-                <div className="flex items-center gap-2 min-w-0">
-                  <img
-                    src="https://assets.smarttarget.com.br/company/target.svg"
-                    alt={platformName}
-                    className="w-7 h-7 object-contain shrink-0"
-                  />
-                  <span className="font-display text-xs font-semibold tracking-tight text-white whitespace-nowrap truncate">
-                    {platformName}
-                  </span>
-                </div>
-              )}
+              {!isSidebarCollapsed && <BrandHeaderLogo platformName={platformName} />}
               <button
                 type="button"
                 onClick={() => setIsSidebarCollapsed((prev) => !prev)}
@@ -735,23 +725,10 @@ export default function App() {
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Top Bar (Brand + Last GraphQL Edge Diagnostic + Session Countdown + Sign Out) */}
         <header className="min-h-14 py-1.5 px-6 border-b border-slate-800/80 bg-[#090D16] flex items-center justify-between gap-6 shrink-0">
-          {isExpandedView ? (
-            <div className="flex items-center gap-2.5 min-w-0">
-              <img
-                src="https://assets.smarttarget.com.br/company/target.svg"
-                alt={platformName}
-                className="w-7 h-7 object-contain shrink-0"
-              />
-              <span className="font-display text-sm font-semibold tracking-tight text-white leading-tight whitespace-nowrap truncate">
-                {platformName}
-              </span>
-            </div>
+          {isExpandedView || isSidebarCollapsed ? (
+            <BrandHeaderLogo platformName={platformName} />
           ) : (
-            <div className="flex items-center gap-2 min-w-0 text-xs text-slate-400 whitespace-nowrap truncate">
-              <span>
-                {platformName} <span className="font-mono text-[#F6821F]">(ISG)</span>
-              </span>
-            </div>
+            <div aria-hidden="true" />
           )}
 
           <div className="flex items-center gap-3 shrink-0">
