@@ -23,7 +23,7 @@ export default defineConfig(() => {
       {
         name: 'sync-manifest-before-build',
         apply: 'build',
-        buildStart(): void {
+        config(): void {
           const manifestPath = path.resolve(__dirname, 'manifest.json');
           const packagePath = path.resolve(__dirname, 'package.json');
           const metadataPath = path.resolve(__dirname, 'metadata.json');
@@ -31,6 +31,12 @@ export default defineConfig(() => {
           if (!fs.existsSync(manifestPath)) {
             return;
           }
+
+          const writeFileAtomic = (targetPath: string, content: string): void => {
+            const tmpPath = `${targetPath}.${process.pid}.tmp`;
+            fs.writeFileSync(tmpPath, content, 'utf-8');
+            fs.renameSync(tmpPath, targetPath);
+          };
 
           const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as {
             system?: { name?: string; description?: string };
@@ -55,7 +61,7 @@ export default defineConfig(() => {
             build: nextBuild,
           };
 
-          fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf-8');
+          writeFileAtomic(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
           const systemName = manifest.system?.name?.trim() || 'identity-gate';
           const systemDescription = manifest.system?.description?.trim() || '';
@@ -72,14 +78,14 @@ export default defineConfig(() => {
             pkg.name = npmPackageName || 'identity-gate';
             pkg.description = systemDescription;
             pkg.version = semver;
-            fs.writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf-8');
+            writeFileAtomic(packagePath, `${JSON.stringify(pkg, null, 2)}\n`);
           }
 
           if (fs.existsSync(metadataPath)) {
             const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8')) as Record<string, unknown>;
             metadata.name = systemName;
             metadata.description = systemDescription;
-            fs.writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, 'utf-8');
+            writeFileAtomic(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
           }
         },
       },

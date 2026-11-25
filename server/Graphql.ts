@@ -168,11 +168,19 @@ const schema = buildSchema(`
     linkedAt: String!
   }
 
+  type UserPhone {
+    id: ID!
+    number: String!
+    types: [String!]!
+  }
+
   type User {
     id: ID!
     email: String!
+    loginIdentifier: String!
     displayName: String!
     phoneNumber: String
+    phones: [UserPhone!]!
     phoneVerified: Boolean!
     mfaPreferredMethod: String!
     totpEnabled: Boolean!
@@ -337,6 +345,14 @@ const schema = buildSchema(`
   type SystemSettings {
     executionEnvironment: String!
     platformName: String!
+    platformDescription: String!
+    versionNumber: Int!
+    versionRelease: Int!
+    versionRevision: Int!
+    versionBuild: Int!
+    versionCodename: String!
+    companyName: String!
+    copyrightYear: String!
     jwtIssuer: String!
     appBaseUrl: String!
     defaultJwtTtlSeconds: Int!
@@ -391,6 +407,14 @@ const schema = buildSchema(`
   input SystemSettingsInput {
     executionEnvironment: String!
     platformName: String!
+    platformDescription: String
+    versionNumber: Int
+    versionRelease: Int
+    versionRevision: Int
+    versionBuild: Int
+    versionCodename: String
+    companyName: String
+    copyrightYear: String
     jwtIssuer: String!
     appBaseUrl: String
     defaultJwtTtlSeconds: Int!
@@ -458,19 +482,30 @@ const schema = buildSchema(`
     status: String
   }
 
+  input UserPhoneInput {
+    id: ID
+    number: String!
+    types: [String!]!
+  }
+
   input CreateUserInput {
     email: String!
+    loginIdentifier: String
     displayName: String!
     password: String!
+    status: String
     phoneNumber: String
+    phones: [UserPhoneInput!]
     systemId: ID
     roleId: ID
   }
 
   input UpdateUserInput {
     displayName: String
+    loginIdentifier: String
     email: String
     phoneNumber: String
+    phones: [UserPhoneInput!]
     status: String
   }
 
@@ -951,12 +986,81 @@ function mapSystem(row: SystemRow, ctx: GraphQLRequestContext) {
   };
 }
 
+const ALLOWED_PHONE_TYPES = ['Fixo', 'Móvel', 'WhatsApp', 'Skype', 'Residencial', 'Comercial'] as const;
+
+interface StoredUserPhone {
+  id: string;
+  number: string;
+  types: string[];
+}
+
+function parseStoredUserPhones(row: UserRow): StoredUserPhone[] {
+  try {
+    const parsed = JSON.parse(row.phones_json || '[]') as unknown;
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed
+        .map((item, idx) => {
+          const obj = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>;
+          const num = String(obj.number ?? '').trim();
+          const rawTypes = Array.isArray(obj.types) ? obj.types.map((t) => String(t).trim()) : [];
+          const validTypes = rawTypes.filter((t) =>
+            (ALLOWED_PHONE_TYPES as readonly string[]).includes(t)
+          );
+          return {
+            id: String(obj.id || `ph-${row.id}-${idx + 1}`),
+            number: num,
+            types: validTypes.length > 0 ? validTypes : ['Móvel'],
+          };
+        })
+        .filter((p) => p.number.length > 0);
+    }
+  } catch {
+    // fallback below
+  }
+  if (row.phone_number && row.phone_number.trim()) {
+    return [{ id: `ph-${row.id}`, number: row.phone_number.trim(), types: ['Móvel'] }];
+  }
+  return [];
+}
+
+function normalizePhoneInputs(rawPhones: unknown): StoredUserPhone[] {
+  if (!Array.isArray(rawPhones)) return [];
+  const normalized: StoredUserPhone[] = [];
+  for (const entry of rawPhones) {
+    if (!entry || typeof entry !== 'object') continue;
+    const obj = entry as Record<string, unknown>;
+    const number = String(obj.number ?? '').trim();
+    if (!number) continue;
+    const rawTypes = Array.isArray(obj.types) ? obj.types.map((t) => String(t).trim()) : [];
+    const dedupTypes = Array.from(
+      new Set(rawTypes.filter((t) => (ALLOWED_PHONE_TYPES as readonly string[]).includes(t)))
+    );
+    normalized.push({
+      id: obj.id ? String(obj.id) : `ph-${crypto.randomBytes(4).toString('hex')}`,
+      number,
+      types: dedupTypes.length > 0 ? dedupTypes : ['Móvel'],
+    });
+  }
+  return normalized;
+}
+
+function derivePrimaryPhoneNumber(phones: StoredUserPhone[], fallback?: string | null): string | null {
+  if (phones.length > 0) {
+    const mobile = phones.find((p) => p.types.includes('Móvel') || p.types.includes('WhatsApp'));
+    return (mobile || phones[0]).number;
+  }
+  return fallback ? fallback.trim() || null : null;
+}
+
 function mapUser(row: UserRow, ctx: GraphQLRequestContext) {
+  const phones = parseStoredUserPhones(row);
   return {
     id: row.id,
     email: row.email,
+    loginIdentifier: row.login_identifier || row.email.split('@')[0] || row.email,
     displayName: row.display_name,
-    phoneNumber: row.phone_number,
+    phoneNumber: row.phone_number ?? phones[0]?.number ?? null,
+    phones,
     phoneVerified: Boolean(row.phone_verified),
     mfaPreferredMethod: row.mfa_preferred_method,
     totpEnabled: Boolean(row.totp_enabled),
@@ -1103,9 +1207,9 @@ const rootValue = {
       params.push(status);
     }
     if (search && search.trim()) {
-      clauses.push('(u.email LIKE ? OR u.display_name LIKE ?)');
+      clauses.push('(u.email LIKE ? OR u.display_name LIKE ? OR u.login_identifier LIKE ?)');
       const q = `%${search.trim()}%`;
-      params.push(q, q);
+      params.push(q, q, q);
     }
 
     const whereSql = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
@@ -1495,6 +1599,9 @@ const rootValue = {
       throw new Error('INVALID_CODE: O identificador deve conter apenas caracteres alfanumericos, "-" e "_".');
     }
     const nextClientId = existing.client_id;
+    const nextName = String(input.name ?? existing.name).trim() || existing.name;
+    const nextDescription =
+      input.description !== undefined ? String(input.description).trim() : existing.description;
     const now = new Date().toISOString();
     db.prepare(`
       UPDATE systems SET
@@ -1504,10 +1611,10 @@ const rootValue = {
         privacy_policy_version = ?, status = ?, updated_at = ?
       WHERE id = ?
     `).run(
-      String(input.name ?? existing.name),
+      nextName,
       nextSlug,
       nextClientId,
-      String(input.description ?? existing.description),
+      nextDescription,
       JSON.stringify(input.redirectUris ?? JSON.parse(existing.redirect_uris)),
       JSON.stringify(input.allowedGrants ?? JSON.parse(existing.allowed_grants)),
       JSON.stringify(input.allowedIdps ?? JSON.parse(existing.allowed_idps)),
@@ -1524,6 +1631,15 @@ const rootValue = {
     );
     dbStats.totalWrites += 1;
     bumpSystemPolicyVersion(id);
+    if (id === 'identity-secure-gate') {
+      updatePlatformSettings(
+        {
+          platformName: nextName,
+          platformDescription: nextDescription,
+        },
+        jwt.email
+      );
+    }
     purgeAllEdgeCache();
 
     recordStructuredAudit({
@@ -1604,27 +1720,50 @@ const rootValue = {
     const settings = getPlatformSettings();
     const started = performance.now();
     const email = String(input.email).trim().toLowerCase();
+    const rawLogin =
+      input.loginIdentifier !== undefined && input.loginIdentifier !== null
+        ? String(input.loginIdentifier).trim().toLowerCase()
+        : (email.split('@')[0] || email).toLowerCase();
+    if (!rawLogin) {
+      throw new Error('VALIDATION_ERROR: Identificador de Login obrigatorio.');
+    }
     const password = String(input.password || '');
     if (password.length < settings.globalPasswordMinLength) {
       throw new Error(`WEAK_PASSWORD: A senha deve ter no mínimo ${settings.globalPasswordMinLength} caracteres.`);
     }
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    const existing = db.prepare('SELECT id FROM users WHERE LOWER(email) = ?').get(email);
     if (existing) throw new Error('CONFLICT: E-mail ja cadastrado.');
+    const existingLogin = db
+      .prepare('SELECT id FROM users WHERE LOWER(login_identifier) = ?')
+      .get(rawLogin);
+    if (existingLogin) throw new Error('CONFLICT: Identificador de Login ja esta em uso.');
+
+    const phones =
+      input.phones !== undefined
+        ? normalizePhoneInputs(input.phones)
+        : input.phoneNumber && String(input.phoneNumber).trim()
+          ? [{ id: `ph-${crypto.randomBytes(4).toString('hex')}`, number: String(input.phoneNumber).trim(), types: ['Móvel'] }]
+          : [];
+    const primaryPhone = derivePrimaryPhoneNumber(phones, input.phoneNumber ? String(input.phoneNumber) : null);
+    const initialStatus = input.status === 'locked' ? 'locked' : 'active';
 
     const id = `usr-${crypto.randomBytes(4).toString('hex')}`;
     const now = new Date().toISOString();
     db.prepare(`
       INSERT INTO users (
-        id, email, display_name, password_hash, phone_number, phone_verified,
+        id, email, login_identifier, display_name, password_hash, phone_number, phones_json, phone_verified,
         mfa_preferred_method, totp_secret_enc, totp_enabled, backup_codes_hash,
         status, perm_version, last_login_at, anonymized_at, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, 0, 'none', NULL, 0, NULL, 'active', 1, NULL, NULL, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'none', NULL, 0, NULL, ?, 1, NULL, NULL, ?, ?)
     `).run(
       id,
       email,
-      String(input.displayName),
+      rawLogin,
+      String(input.displayName).trim(),
       hashPassword(String(input.password)),
-      input.phoneNumber ? String(input.phoneNumber) : null,
+      primaryPhone,
+      JSON.stringify(phones),
+      initialStatus,
       now,
       now
     );
@@ -1653,7 +1792,7 @@ const rootValue = {
       status: 'success',
       durationMs: performance.now() - started,
       ip: ctx.ip,
-      details: { targetEmailMasked: maskEmail(email) },
+      details: { targetEmailMasked: maskEmail(email), loginIdentifier: rawLogin },
     });
 
     const row = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRow;
@@ -1665,11 +1804,51 @@ const rootValue = {
     const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRow | undefined;
     if (!existing) throw new Error('NOT_FOUND: Usuario nao encontrado.');
 
+    const nextEmail = String(input.email ?? existing.email).trim().toLowerCase();
+    const emailConflict = db
+      .prepare('SELECT id FROM users WHERE LOWER(email) = ? AND id != ?')
+      .get(nextEmail, id);
+    if (emailConflict) throw new Error('CONFLICT: E-mail ja cadastrado em outra conta.');
+
+    const nextLogin = (
+      input.loginIdentifier !== undefined && input.loginIdentifier !== null
+        ? String(input.loginIdentifier)
+        : existing.login_identifier || nextEmail.split('@')[0] || nextEmail
+    )
+      .trim()
+      .toLowerCase();
+    if (!nextLogin) {
+      throw new Error('VALIDATION_ERROR: Identificador de Login obrigatorio.');
+    }
+    const loginConflict = db
+      .prepare('SELECT id FROM users WHERE LOWER(login_identifier) = ? AND id != ?')
+      .get(nextLogin, id);
+    if (loginConflict) throw new Error('CONFLICT: Identificador de Login ja esta em uso.');
+
+    let nextPhones: StoredUserPhone[];
+    if (input.phones !== undefined) {
+      nextPhones = normalizePhoneInputs(input.phones);
+    } else if (input.phoneNumber !== undefined) {
+      nextPhones = input.phoneNumber && String(input.phoneNumber).trim()
+        ? [{ id: `ph-${id}`, number: String(input.phoneNumber).trim(), types: ['Móvel'] }]
+        : [];
+    } else {
+      nextPhones = parseStoredUserPhones(existing);
+    }
+    const nextPrimaryPhone = derivePrimaryPhoneNumber(
+      nextPhones,
+      input.phoneNumber !== undefined ? (input.phoneNumber ? String(input.phoneNumber) : null) : existing.phone_number
+    );
+
     const now = new Date().toISOString();
-    db.prepare('UPDATE users SET display_name = ?, email = ?, phone_number = ?, status = ?, updated_at = ? WHERE id = ?').run(
-      String(input.displayName ?? existing.display_name),
-      String(input.email ?? existing.email).trim().toLowerCase(),
-      input.phoneNumber !== undefined ? (input.phoneNumber ? String(input.phoneNumber) : null) : existing.phone_number,
+    db.prepare(
+      'UPDATE users SET display_name = ?, login_identifier = ?, email = ?, phone_number = ?, phones_json = ?, status = ?, updated_at = ? WHERE id = ?'
+    ).run(
+      String(input.displayName ?? existing.display_name).trim(),
+      nextLogin,
+      nextEmail,
+      nextPrimaryPhone,
+      JSON.stringify(nextPhones),
       String(input.status ?? existing.status),
       now,
       id
@@ -1688,7 +1867,7 @@ const rootValue = {
       resourceId: id,
       status: 'success',
       ip: ctx.ip,
-      details: { status: input.status ?? existing.status },
+      details: { status: input.status ?? existing.status, phonesCount: nextPhones.length },
     });
 
     const row = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRow;

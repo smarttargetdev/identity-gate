@@ -273,8 +273,8 @@ async function startServer() {
 
     dbStats.totalReads += 1;
     const user = db
-      .prepare('SELECT * FROM users WHERE email = ?')
-      .get(normalizedEmail) as UserRow | undefined;
+      .prepare('SELECT * FROM users WHERE LOWER(email) = ? OR LOWER(login_identifier) = ?')
+      .get(normalizedEmail, normalizedEmail) as UserRow | undefined;
 
     if (!user || user.status !== 'active' || !verifyPassword(password, user.password_hash)) {
       const nextCount = failureState && failureState.resetAt > Date.now() ? failureState.count + 1 : 1;
@@ -465,14 +465,17 @@ async function startServer() {
       .get(system.id) as { id: string } | undefined;
 
     const userId = `usr-${crypto.randomBytes(4).toString('hex')}`;
+    const loginBase = (cleanEmail.split('@')[0] || userId).replace(/[^a-z0-9._-]/g, '') || userId;
+    const loginTaken = db.prepare('SELECT id FROM users WHERE LOWER(login_identifier) = ?').get(loginBase);
+    const cleanLogin = loginTaken ? `${loginBase}_${userId.slice(-4)}` : loginBase;
     const now = new Date().toISOString();
     db.prepare(`
       INSERT INTO users (
-        id, email, display_name, password_hash, phone_number, phone_verified,
+        id, email, login_identifier, display_name, password_hash, phone_number, phones_json, phone_verified,
         mfa_preferred_method, totp_secret_enc, totp_enabled, backup_codes_hash,
         status, perm_version, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, NULL, 0, 'none', NULL, 0, NULL, 'active', 1, ?, ?)
-    `).run(userId, cleanEmail, displayName.trim(), hashPassword(password), now, now);
+      ) VALUES (?, ?, ?, ?, ?, NULL, '[]', 0, 'none', NULL, 0, NULL, 'active', 1, ?, ?)
+    `).run(userId, cleanEmail, cleanLogin, displayName.trim(), hashPassword(password), now, now);
 
     if (defaultRole) {
       db.prepare('INSERT INTO user_system_bindings (id, user_id, system_id, role_id, created_at) VALUES (?, ?, ?, ?, ?)').run(
@@ -888,9 +891,10 @@ async function startServer() {
     }
 
     if (grant_type === 'password') {
-      const user = db.prepare('SELECT * FROM users WHERE email = ?').get((username || '').trim().toLowerCase()) as
-        | UserRow
-        | undefined;
+      const loginKey = (username || '').trim().toLowerCase();
+      const user = db
+        .prepare('SELECT * FROM users WHERE LOWER(email) = ? OR LOWER(login_identifier) = ?')
+        .get(loginKey, loginKey) as UserRow | undefined;
       if (!user || !verifyPassword(password || '', user.password_hash)) {
         res.status(401).json({ error: 'invalid_grant', error_description: 'Credenciais invalidas.' });
         return;
@@ -1081,6 +1085,12 @@ async function startServer() {
         hashPassword(crypto.randomBytes(16).toString('hex')),
         now,
         now
+      );
+      const jitBase = (cleanEmail.split('@')[0] || userId).replace(/[^a-z0-9._-]/g, '') || userId;
+      const jitTaken = db.prepare('SELECT id FROM users WHERE LOWER(login_identifier) = ?').get(jitBase);
+      db.prepare('UPDATE users SET login_identifier = ? WHERE id = ?').run(
+        jitTaken ? `${jitBase}_${userId.slice(-4)}` : jitBase,
+        userId
       );
 
       db.prepare('INSERT INTO user_system_bindings (id, user_id, system_id, role_id, created_at) VALUES (?, ?, ?, ?, ?)').run(

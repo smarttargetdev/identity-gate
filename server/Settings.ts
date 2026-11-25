@@ -10,12 +10,26 @@
  */
 
 import { db, dbStats, setAuditBatchSize } from './Db.ts';
+import {
+  MANIFEST_DEFAULT_DESCRIPTION,
+  MANIFEST_DEFAULT_NAME,
+  readManifest,
+  writeManifest,
+} from './Manifest.ts';
 
 export type ExecutionEnvironment = 'Desenvolvimento' | 'Homologação' | 'Produção';
 
 export interface PlatformSettings {
   executionEnvironment: ExecutionEnvironment;
   platformName: string;
+  platformDescription: string;
+  versionNumber: number;
+  versionRelease: number;
+  versionRevision: number;
+  versionBuild: number;
+  versionCodename: string;
+  companyName: string;
+  copyrightYear: string;
   jwtIssuer: string;
   appBaseUrl: string;
   defaultJwtTtlSeconds: number;
@@ -68,7 +82,15 @@ export interface PlatformSettings {
 
 const DEFAULT_SETTINGS: PlatformSettings = {
   executionEnvironment: 'Desenvolvimento',
-  platformName: 'Identity Secure Gate',
+  platformName: MANIFEST_DEFAULT_NAME,
+  platformDescription: MANIFEST_DEFAULT_DESCRIPTION,
+  versionNumber: 1,
+  versionRelease: 1,
+  versionRevision: 0,
+  versionBuild: 0,
+  versionCodename: 'genesis',
+  companyName: 'Smart Target',
+  copyrightYear: '2026',
   jwtIssuer: process.env.IAM_JWT_ISSUER || 'https://isg.edge.local',
   appBaseUrl: process.env.APP_URL || '',
   defaultJwtTtlSeconds: 3600,
@@ -166,7 +188,18 @@ function normalizeSettings(raw: Partial<PlatformSettings>, updatedBy = 'system')
   );
   return {
     executionEnvironment: env,
-    platformName: String(raw.platformName ?? DEFAULT_SETTINGS.platformName).trim() || 'Identity Secure Gate',
+    platformName: String(raw.platformName ?? DEFAULT_SETTINGS.platformName).trim() || MANIFEST_DEFAULT_NAME,
+    platformDescription:
+      raw.platformDescription !== undefined
+        ? String(raw.platformDescription).trim()
+        : DEFAULT_SETTINGS.platformDescription,
+    versionNumber: clampInt(raw.versionNumber, DEFAULT_SETTINGS.versionNumber, 0, 999999),
+    versionRelease: clampInt(raw.versionRelease, DEFAULT_SETTINGS.versionRelease, 0, 999999),
+    versionRevision: clampInt(raw.versionRevision, DEFAULT_SETTINGS.versionRevision, 0, 999999),
+    versionBuild: clampInt(raw.versionBuild, DEFAULT_SETTINGS.versionBuild, 0, 999999),
+    versionCodename: String(raw.versionCodename ?? DEFAULT_SETTINGS.versionCodename).trim(),
+    companyName: String(raw.companyName ?? DEFAULT_SETTINGS.companyName).trim() || 'Smart Target',
+    copyrightYear: String(raw.copyrightYear ?? DEFAULT_SETTINGS.copyrightYear).trim() || '2026',
     jwtIssuer: String(raw.jwtIssuer ?? DEFAULT_SETTINGS.jwtIssuer).trim() || DEFAULT_SETTINGS.jwtIssuer,
     appBaseUrl: String(raw.appBaseUrl ?? DEFAULT_SETTINGS.appBaseUrl).trim(),
     defaultJwtTtlSeconds: clampInt(raw.defaultJwtTtlSeconds, DEFAULT_SETTINGS.defaultJwtTtlSeconds, 60, 86400),
@@ -263,6 +296,39 @@ function normalizeSettings(raw: Partial<PlatformSettings>, updatedBy = 'system')
   };
 }
 
+function syncPrimarySystemIdentity(name: string, description: string): void {
+  const existing = db
+    .prepare('SELECT name, description, policy_version FROM systems WHERE id = ?')
+    .get('identity-secure-gate') as { name: string; description: string; policy_version: number } | undefined;
+  if (!existing) return;
+  if (existing.name === name && existing.description === description) return;
+
+  const now = new Date().toISOString();
+  const nextPolicyVersion = Number(existing.policy_version || 1) + 1;
+  db.prepare(
+    'UPDATE systems SET name = ?, description = ?, policy_version = ?, updated_at = ? WHERE id = ?'
+  ).run(name, description, nextPolicyVersion, now, 'identity-secure-gate');
+  db.prepare("INSERT OR REPLACE INTO kv_store (kv_key, kv_value, updated_at) VALUES ('s_ver:identity-secure-gate', ?, ?)").run(
+    String(nextPolicyVersion),
+    now
+  );
+  dbStats.totalWrites += 2;
+}
+
+function overlayManifest(settings: PlatformSettings): PlatformSettings {
+  const manifest = readManifest();
+  return {
+    ...settings,
+    platformName: manifest.system.name,
+    platformDescription: manifest.system.description,
+    versionNumber: manifest.version.number,
+    versionRelease: manifest.version.release,
+    versionRevision: manifest.version.revision,
+    versionBuild: manifest.version.build,
+    versionCodename: manifest.version.codename,
+  };
+}
+
 function ensureInitialSettingsSeeded(): PlatformSettings {
   const row = db
     .prepare("SELECT setting_value, updated_by, updated_at FROM system_settings WHERE setting_key = 'platform_config'")
@@ -297,7 +363,9 @@ function ensureInitialSettingsSeeded(): PlatformSettings {
       parsed.clientIdSeparator = '_';
       migrated = true;
     }
-    const normalized = normalizeSettings({ ...parsed, updatedAt: row.updated_at, updatedBy: row.updated_by });
+    const normalized = overlayManifest(
+      normalizeSettings({ ...parsed, updatedAt: row.updated_at, updatedBy: row.updated_by })
+    );
     if (migrated) {
       const now = new Date().toISOString();
       db.prepare(
@@ -305,24 +373,26 @@ function ensureInitialSettingsSeeded(): PlatformSettings {
       ).run(JSON.stringify(normalized), now, 'platform_config');
       dbStats.totalWrites += 1;
     }
+    syncPrimarySystemIdentity(normalized.platformName, normalized.platformDescription);
     setAuditBatchSize(normalized.auditFlushBatchSize);
     cachedSettings = normalized;
     return normalized;
   }
 
   const now = new Date().toISOString();
-  const initial = normalizeSettings({ ...DEFAULT_SETTINGS, updatedAt: now, updatedBy: 'system' });
+  const initial = overlayManifest(normalizeSettings({ ...DEFAULT_SETTINGS, updatedAt: now, updatedBy: 'system' }));
   db.prepare(
     'INSERT INTO system_settings (setting_key, setting_value, updated_by, updated_at) VALUES (?, ?, ?, ?)'
   ).run('platform_config', JSON.stringify(initial), 'system', now);
   dbStats.totalWrites += 1;
+  syncPrimarySystemIdentity(initial.platformName, initial.platformDescription);
   setAuditBatchSize(initial.auditFlushBatchSize);
   cachedSettings = initial;
   return initial;
 }
 
 export function getPlatformSettings(): PlatformSettings {
-  if (cachedSettings) return cachedSettings;
+  if (cachedSettings) return overlayManifest(cachedSettings);
   dbStats.totalReads += 1;
   return ensureInitialSettingsSeeded();
 }
@@ -343,25 +413,78 @@ export function updatePlatformSettings(
     updatedBy
   );
 
+  const writtenManifest = writeManifest({
+    system: {
+      name: merged.platformName,
+      description: merged.platformDescription,
+    },
+    version: {
+      number: merged.versionNumber,
+      release: merged.versionRelease,
+      revision: merged.versionRevision,
+      build: merged.versionBuild,
+      codename: merged.versionCodename,
+    },
+  });
+
+  const synced: PlatformSettings = {
+    ...merged,
+    platformName: writtenManifest.system.name,
+    platformDescription: writtenManifest.system.description,
+    versionNumber: writtenManifest.version.number,
+    versionRelease: writtenManifest.version.release,
+    versionRevision: writtenManifest.version.revision,
+    versionBuild: writtenManifest.version.build,
+    versionCodename: writtenManifest.version.codename,
+  };
+
   db.prepare(
     'INSERT OR REPLACE INTO system_settings (setting_key, setting_value, updated_by, updated_at) VALUES (?, ?, ?, ?)'
-  ).run('platform_config', JSON.stringify(merged), updatedBy, now);
+  ).run('platform_config', JSON.stringify(synced), updatedBy, now);
   dbStats.totalWrites += 1;
-  setAuditBatchSize(merged.auditFlushBatchSize);
-  cachedSettings = merged;
-  return merged;
+  syncPrimarySystemIdentity(synced.platformName, synced.platformDescription);
+  setAuditBatchSize(synced.auditFlushBatchSize);
+  cachedSettings = synced;
+  return synced;
 }
 
 export function resetPlatformSettings(updatedBy: string): PlatformSettings {
   const now = new Date().toISOString();
   const defaults = normalizeSettings({ ...DEFAULT_SETTINGS, updatedAt: now, updatedBy }, updatedBy);
+
+  const writtenManifest = writeManifest({
+    system: {
+      name: defaults.platformName,
+      description: defaults.platformDescription,
+    },
+    version: {
+      number: defaults.versionNumber,
+      release: defaults.versionRelease,
+      revision: defaults.versionRevision,
+      build: defaults.versionBuild,
+      codename: defaults.versionCodename,
+    },
+  });
+
+  const synced: PlatformSettings = {
+    ...defaults,
+    platformName: writtenManifest.system.name,
+    platformDescription: writtenManifest.system.description,
+    versionNumber: writtenManifest.version.number,
+    versionRelease: writtenManifest.version.release,
+    versionRevision: writtenManifest.version.revision,
+    versionBuild: writtenManifest.version.build,
+    versionCodename: writtenManifest.version.codename,
+  };
+
   db.prepare(
     'INSERT OR REPLACE INTO system_settings (setting_key, setting_value, updated_by, updated_at) VALUES (?, ?, ?, ?)'
-  ).run('platform_config', JSON.stringify(defaults), updatedBy, now);
+  ).run('platform_config', JSON.stringify(synced), updatedBy, now);
   dbStats.totalWrites += 1;
-  setAuditBatchSize(defaults.auditFlushBatchSize);
-  cachedSettings = defaults;
-  return defaults;
+  syncPrimarySystemIdentity(synced.platformName, synced.platformDescription);
+  setAuditBatchSize(synced.auditFlushBatchSize);
+  cachedSettings = synced;
+  return synced;
 }
 
 export function getPublicPlatformConfig() {
@@ -369,6 +492,16 @@ export function getPublicPlatformConfig() {
   return {
     executionEnvironment: s.executionEnvironment,
     platformName: s.platformName,
+    platformDescription: s.platformDescription,
+    version: {
+      number: s.versionNumber,
+      release: s.versionRelease,
+      revision: s.versionRevision,
+      build: s.versionBuild,
+      codename: s.versionCodename,
+    },
+    companyName: s.companyName,
+    copyrightYear: s.copyrightYear,
     allowSelfRegistration: s.allowSelfRegistration,
     sessionWarningSeconds: s.sessionWarningSeconds,
     telemetryStreamEnabled: s.telemetryStreamEnabled,

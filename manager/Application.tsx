@@ -20,11 +20,11 @@ import { RbacClaimsManager } from './components/RbacClaimsManager';
 import { IdpAndOAuthSandbox } from './components/IdpAndOAuthSandbox';
 import { GraphqlAndCloudflare } from './components/GraphqlAndCloudflare';
 import { ProfileAndCompliance } from './components/ProfileAndCompliance';
-import { SystemSettings } from './components/SystemSettings';
+import { SystemSettings, type SettingsSection } from './components/SystemSettings';
 import { TokenGate } from './components/TokenGate';
 import {
-  ASSETS_SUBMENUS,
   DashboardLayout,
+  IDENTITIES_SUBMENUS,
   NAV_ITEMS,
   type DashboardToastState,
   type NavTab,
@@ -66,7 +66,8 @@ export default function Application() {
 
   const [activeTab, setActiveTab] = useState<NavTab>('overview');
   const [overviewMenuExpanded, setOverviewMenuExpanded] = useState(true);
-  const [assetsMenuExpanded, setAssetsMenuExpanded] = useState(true);
+  const [identitiesMenuExpanded, setIdentitiesMenuExpanded] = useState(true);
+  const [settingsMenuExpanded, setSettingsMenuExpanded] = useState(true);
   const [shortcutChordPending, setShortcutChordPending] = useState(false);
   const [toast, setToast] = useState<DashboardToastState | null>(null);
   const [lastDiag, setLastDiag] = useState<DiagnosticHeaders | null>(null);
@@ -212,19 +213,22 @@ export default function Application() {
             (!item.adminOnly || isSuperAdminUser) &&
             hasPerm(item.requiredPermission)
         );
-        const matchedAsset = ASSETS_SUBMENUS.find(
+        const matchedIdentitySub = IDENTITIES_SUBMENUS.find(
           (sub) => sub.shortcut === key && hasPerm(sub.requiredPermission)
         );
         clearChord();
-        if (matchedAsset) {
+        if (matchedIdentitySub) {
           ev.preventDefault();
-          setActiveTab(matchedAsset.id);
-          setAssetsMenuExpanded(true);
+          setActiveTab(matchedIdentitySub.id);
+          setIdentitiesMenuExpanded(true);
         } else if (matchedNav) {
           ev.preventDefault();
-          if (matchedNav.id === 'assets') {
+          if (matchedNav.id === 'identities') {
             setActiveTab('systems');
-            setAssetsMenuExpanded(true);
+            setIdentitiesMenuExpanded(true);
+          } else if (matchedNav.id === 'settings') {
+            setActiveTab('settings-environment');
+            setSettingsMenuExpanded(true);
           } else {
             setActiveTab(matchedNav.id);
           }
@@ -280,14 +284,17 @@ export default function Application() {
   const canWriteSystems = hasPermission('iam:systems:write');
   const canWriteRoles = hasPermission('iam:roles:write');
   const platformName = publicConfig?.platformName || 'Identity Secure Gate';
+  const platformVersion = publicConfig?.version ?? null;
+  const companyName = publicConfig?.companyName || 'Smart Target';
+  const copyrightYear = publicConfig?.copyrightYear || '2026';
 
   const resolvedActiveTab: NavTab = (() => {
-    if (activeTab === 'assets') return 'systems';
+    if (activeTab === 'identities') return 'systems';
     if (activeTab === 'users' && !canReadUsers) return 'systems';
     if ((activeTab === 'audit-logs' || activeTab === 'overview-audit' || activeTab === 'overview-alerts') && !canReadAuditLogs) {
       return 'overview';
     }
-    if (activeTab === 'settings' && !isSuperAdmin) return 'overview';
+    if ((activeTab === 'settings' || activeTab.startsWith('settings-')) && !isSuperAdmin) return 'overview';
     return activeTab;
   })();
 
@@ -295,6 +302,9 @@ export default function Application() {
     <>
       <DashboardLayout
         platformName={platformName}
+        platformVersion={platformVersion}
+        companyName={companyName}
+        copyrightYear={copyrightYear}
         activeTab={resolvedActiveTab}
         onSelectTab={setActiveTab}
         session={session}
@@ -308,9 +318,12 @@ export default function Application() {
         overviewMenuExpanded={overviewMenuExpanded}
         onToggleOverviewMenu={() => setOverviewMenuExpanded((prev) => !prev)}
         onExpandOverviewMenu={() => setOverviewMenuExpanded(true)}
-        assetsMenuExpanded={assetsMenuExpanded}
-        onToggleAssetsMenu={() => setAssetsMenuExpanded((prev) => !prev)}
-        onExpandAssetsMenu={() => setAssetsMenuExpanded(true)}
+        identitiesMenuExpanded={identitiesMenuExpanded}
+        onToggleIdentitiesMenu={() => setIdentitiesMenuExpanded((prev) => !prev)}
+        onExpandIdentitiesMenu={() => setIdentitiesMenuExpanded(true)}
+        settingsMenuExpanded={settingsMenuExpanded}
+        onToggleSettingsMenu={() => setSettingsMenuExpanded((prev) => !prev)}
+        onExpandSettingsMenu={() => setSettingsMenuExpanded(true)}
         toast={toast}
         onDismissToast={() => setToast(null)}
         onLogout={handleLogout}
@@ -345,7 +358,21 @@ export default function Application() {
                   : undefined
               }
               onNotify={notify}
-              onSystemsChanged={() => setRefreshTick((t) => t + 1)}
+              onOpenPlatformSettings={
+                isSuperAdmin
+                  ? () => {
+                      setSettingsMenuExpanded(true);
+                      setActiveTab('settings-platform');
+                    }
+                  : undefined
+              }
+              onSystemsChanged={() => {
+                fetch('/api/public/config')
+                  .then((r) => r.json())
+                  .then((cfg) => setPublicConfig(cfg))
+                  .catch(() => {});
+                setRefreshTick((t) => t + 1);
+              }}
             />
           )}
           {resolvedActiveTab === 'users' && (
@@ -367,15 +394,30 @@ export default function Application() {
               refreshSignal={refreshTick}
             />
           )}
-          {resolvedActiveTab === 'settings' && (
+          {(resolvedActiveTab === 'settings' || resolvedActiveTab.startsWith('settings-')) && (
             <SystemSettings
               token={session.token}
+              section={resolvedActiveTab as SettingsSection}
               isSuperAdmin={isSuperAdmin}
               onNotify={notify}
+              onNavigateToSystems={() => {
+                setIdentitiesMenuExpanded(true);
+                setActiveTab('systems');
+              }}
               onSettingsUpdated={(updated) => {
                 setPublicConfig({
                   executionEnvironment: updated.executionEnvironment,
                   platformName: updated.platformName,
+                  platformDescription: updated.platformDescription,
+                  version: {
+                    number: updated.versionNumber,
+                    release: updated.versionRelease,
+                    revision: updated.versionRevision,
+                    build: updated.versionBuild,
+                    codename: updated.versionCodename,
+                  },
+                  companyName: updated.companyName,
+                  copyrightYear: updated.copyrightYear,
                   allowSelfRegistration: updated.allowSelfRegistration,
                   sessionWarningSeconds: updated.sessionWarningSeconds,
                   telemetryStreamEnabled: updated.telemetryStreamEnabled,

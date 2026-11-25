@@ -113,11 +113,21 @@ export interface ExternalIdentity {
   linkedAt: string;
 }
 
+export type PhoneType = 'Fixo' | 'Móvel' | 'WhatsApp' | 'Skype' | 'Residencial' | 'Comercial';
+
+export interface UserPhone {
+  id: string;
+  number: string;
+  types: PhoneType[];
+}
+
 export interface IamUser {
   id: string;
   email: string;
+  loginIdentifier: string;
   displayName: string;
   phoneNumber: string | null;
+  phones: UserPhone[];
   phoneVerified: boolean;
   mfaPreferredMethod: 'totp' | 'sms' | 'none';
   totpEnabled: boolean;
@@ -237,9 +247,21 @@ export interface SystemHealthEvent {
   createdAt: string;
 }
 
+export interface PlatformVersionInfo {
+  number: number;
+  release: number;
+  revision: number;
+  build: number;
+  codename: string;
+}
+
 export interface PublicPlatformConfig {
   executionEnvironment: ExecutionEnvironment;
   platformName: string;
+  platformDescription?: string;
+  version?: PlatformVersionInfo;
+  companyName: string;
+  copyrightYear: string;
   allowSelfRegistration: boolean;
   sessionWarningSeconds: number;
   telemetryStreamEnabled: boolean;
@@ -259,6 +281,14 @@ export interface PublicPlatformConfig {
 export interface PlatformSystemSettings {
   executionEnvironment: ExecutionEnvironment;
   platformName: string;
+  platformDescription: string;
+  versionNumber: number;
+  versionRelease: number;
+  versionRevision: number;
+  versionBuild: number;
+  versionCodename: string;
+  companyName: string;
+  copyrightYear: string;
   jwtIssuer: string;
   appBaseUrl: string;
   defaultJwtTtlSeconds: number;

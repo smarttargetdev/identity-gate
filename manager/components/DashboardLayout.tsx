@@ -38,31 +38,37 @@ import {
   Zap,
   History,
   KeyRound,
-  Layers,
+  Fingerprint,
   Menu,
+  Server,
+  Lock,
+  Database,
+  ShieldCheck,
+  Bug,
 } from 'lucide-react';
 import type { OverviewSection } from './OverviewTelemetry';
+import type { SettingsSection } from './SystemSettings';
 import { LatencySparkline } from './LatencySparkline';
-import { BrandHeaderLogo } from './BrandHeaderLogo';
+import { BrandHeader } from './BrandHeader';
 import { VersionBadge } from './VersionBadge';
 import type { SystemHealthState } from '../hooks/UseSystemHealth';
-import type { AuthSessionState, DiagnosticHeaders } from '../domains/Identity';
+import type { AuthSessionState, DiagnosticHeaders, PlatformVersionInfo } from '../domains/Identity';
 
 export type NavTab =
   | OverviewSection
-  | 'assets'
+  | 'identities'
   | 'systems'
   | 'users'
   | 'rbac'
   | 'audit-logs'
-  | 'settings'
+  | SettingsSection
   | 'idps'
   | 'graphql'
   | 'get-token'
   | 'compliance'
   | 'profile';
 
-export type AssetSubTab = 'systems' | 'users' | 'rbac';
+export type IdentitySubTab = 'systems' | 'users';
 export type ToastVariant = 'success' | 'error' | 'warning';
 
 export interface DashboardToastState {
@@ -81,7 +87,8 @@ export const NAV_ITEMS: Array<{
   requiredPermission?: string;
 }> = [
   { id: 'overview', label: 'Visão Geral', group: 'admin', icon: Activity, shortcut: 'o' },
-  { id: 'assets', label: 'Ativos', group: 'admin', icon: Layers, shortcut: 'v' },
+  { id: 'identities', label: 'Identidades', group: 'admin', icon: Fingerprint, shortcut: 'd' },
+  { id: 'rbac', label: 'Acesso', group: 'admin', icon: Shield, shortcut: 'r' },
   {
     id: 'audit-logs',
     label: 'Auditoria',
@@ -98,8 +105,8 @@ export const NAV_ITEMS: Array<{
   { id: 'profile', label: 'Perfil', group: 'self', icon: UserCircle2, shortcut: 'p' },
 ];
 
-export const ASSETS_SUBMENUS: Array<{
-  id: AssetSubTab;
+export const IDENTITIES_SUBMENUS: Array<{
+  id: IdentitySubTab;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   shortcut: string;
@@ -107,7 +114,20 @@ export const ASSETS_SUBMENUS: Array<{
 }> = [
   { id: 'systems', label: 'Sistemas', icon: AppWindow, shortcut: 's' },
   { id: 'users', label: 'Usuários', icon: Users, shortcut: 'u', requiredPermission: 'iam:users:read' },
-  { id: 'rbac', label: 'Permissões', icon: Shield, shortcut: 'r' },
+];
+
+export const SETTINGS_SUBMENUS: Array<{
+  id: Exclude<SettingsSection, 'settings'>;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}> = [
+  { id: 'settings-environment', label: 'Ambientes', icon: Server },
+  { id: 'settings-platform', label: 'Plataforma', icon: Globe },
+  { id: 'settings-infra', label: 'Infraestrutura', icon: Code2 },
+  { id: 'settings-auth', label: 'Autorização & Autenticação', icon: Lock },
+  { id: 'settings-edge', label: 'Edge Cache & Auditoria', icon: Database },
+  { id: 'settings-compliance', label: 'LGPD & Privacidade', icon: ShieldCheck },
+  { id: 'settings-errors', label: 'Log de Erros Detalhado', icon: Bug },
 ];
 
 export const OVERVIEW_SUBMENUS: Array<{
@@ -133,6 +153,9 @@ const GROUP_LABELS: Record<'admin' | 'infra' | 'self', string> = {
 
 interface DashboardLayoutProps {
   platformName: string;
+  platformVersion?: PlatformVersionInfo | null;
+  companyName?: string;
+  copyrightYear?: string;
   activeTab: NavTab;
   onSelectTab: (tab: NavTab) => void;
   session: AuthSessionState;
@@ -146,9 +169,12 @@ interface DashboardLayoutProps {
   overviewMenuExpanded: boolean;
   onToggleOverviewMenu: () => void;
   onExpandOverviewMenu: () => void;
-  assetsMenuExpanded: boolean;
-  onToggleAssetsMenu: () => void;
-  onExpandAssetsMenu: () => void;
+  identitiesMenuExpanded: boolean;
+  onToggleIdentitiesMenu: () => void;
+  onExpandIdentitiesMenu: () => void;
+  settingsMenuExpanded: boolean;
+  onToggleSettingsMenu: () => void;
+  onExpandSettingsMenu: () => void;
   toast: DashboardToastState | null;
   onDismissToast: () => void;
   onLogout: () => void;
@@ -157,6 +183,9 @@ interface DashboardLayoutProps {
 
 export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   platformName,
+  platformVersion,
+  companyName = 'Smart Target',
+  copyrightYear = '2026',
   activeTab,
   onSelectTab,
   session,
@@ -170,9 +199,12 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
   overviewMenuExpanded,
   onToggleOverviewMenu,
   onExpandOverviewMenu,
-  assetsMenuExpanded,
-  onToggleAssetsMenu,
-  onExpandAssetsMenu,
+  identitiesMenuExpanded,
+  onToggleIdentitiesMenu,
+  onExpandIdentitiesMenu,
+  settingsMenuExpanded,
+  onToggleSettingsMenu,
+  onExpandSettingsMenu,
   toast,
   onDismissToast,
   onLogout,
@@ -187,9 +219,16 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
     if (overviewSub) {
       return { group: GROUP_LABELS.admin, section: 'Visão Geral', detail: overviewSub.label };
     }
-    const assetSub = ASSETS_SUBMENUS.find((s) => s.id === activeTab);
-    if (assetSub) {
-      return { group: GROUP_LABELS.admin, section: 'Ativos', detail: assetSub.label };
+    const identitySub = IDENTITIES_SUBMENUS.find((s) => s.id === activeTab);
+    if (identitySub) {
+      return { group: GROUP_LABELS.admin, section: 'Identidades', detail: identitySub.label };
+    }
+    const settingsSub = SETTINGS_SUBMENUS.find((s) => s.id === activeTab);
+    if (settingsSub) {
+      return { group: GROUP_LABELS.admin, section: 'Configurações', detail: settingsSub.label };
+    }
+    if (activeTab === 'settings') {
+      return { group: GROUP_LABELS.admin, section: 'Configurações', detail: 'Ambientes' };
     }
     const navItem = NAV_ITEMS.find((i) => i.id === activeTab);
     if (navItem) {
@@ -217,12 +256,15 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           ).map((item) => {
             const Icon = item.icon;
             const isOverviewGroup = item.id === 'overview';
-            const isAssetsGroup = item.id === 'assets';
+            const isIdentitiesGroup = item.id === 'identities';
+            const isSettingsGroup = item.id === 'settings';
             const isOverviewChildActive = isOverviewGroup && activeTab.startsWith('overview-');
-            const isAssetsChildActive =
-              isAssetsGroup && (activeTab === 'systems' || activeTab === 'users' || activeTab === 'rbac');
+            const isIdentitiesChildActive =
+              isIdentitiesGroup && (activeTab === 'systems' || activeTab === 'users');
+            const isSettingsChildActive = isSettingsGroup && activeTab.startsWith('settings-');
             const isActive =
-              activeTab === item.id || (collapsed && (isOverviewChildActive || isAssetsChildActive));
+              activeTab === item.id ||
+              (collapsed && (isOverviewChildActive || isIdentitiesChildActive || isSettingsChildActive));
 
             if (isOverviewGroup) {
               return (
@@ -310,18 +352,18 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
               );
             }
 
-            if (isAssetsGroup) {
-              const visibleAssetSubs = ASSETS_SUBMENUS.filter((sub) => hasPermission(sub.requiredPermission));
+            if (isIdentitiesGroup) {
+              const visibleIdentitySubs = IDENTITIES_SUBMENUS.filter((sub) => hasPermission(sub.requiredPermission));
               return (
                 <div key={item.id} className="space-y-0.5">
                   <div className="flex items-center gap-0.5">
                     <button
                       type="button"
                       onClick={() => {
-                        if (!isAssetsChildActive) {
-                          selectAndCloseMobile(visibleAssetSubs[0]?.id ?? 'systems');
+                        if (!isIdentitiesChildActive) {
+                          selectAndCloseMobile(visibleIdentitySubs[0]?.id ?? 'systems');
                         }
-                        onExpandAssetsMenu();
+                        onExpandIdentitiesMenu();
                       }}
                       title={`${item.label} (g ${item.shortcut})`}
                       aria-label={item.label}
@@ -330,7 +372,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       } rounded-md text-xs font-medium transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F6821F]/60 ${
                         isActive
                           ? 'bg-[#F6821F]/15 text-white border border-[#F6821F]/40'
-                          : isAssetsChildActive
+                          : isIdentitiesChildActive
                             ? 'bg-slate-800/40 text-slate-100 border border-slate-700/60'
                             : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/40 border border-transparent'
                       }`}
@@ -338,7 +380,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                       <span className="flex items-center gap-2.5 min-w-0">
                         <Icon
                           className={`w-3.5 h-3.5 shrink-0 ${
-                            isActive || isAssetsChildActive ? 'text-[#F6821F]' : 'text-slate-400'
+                            isActive || isIdentitiesChildActive ? 'text-[#F6821F]' : 'text-slate-400'
                           }`}
                         />
                         {!collapsed && <span className="truncate">{item.label}</span>}
@@ -350,14 +392,16 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     {!collapsed && (
                       <button
                         type="button"
-                        onClick={onToggleAssetsMenu}
+                        onClick={onToggleIdentitiesMenu}
                         aria-label={
-                          assetsMenuExpanded ? 'Recolher submenus de Ativos' : 'Expandir submenus de Ativos'
+                          identitiesMenuExpanded
+                            ? 'Recolher submenus de Identidades'
+                            : 'Expandir submenus de Identidades'
                         }
-                        aria-expanded={assetsMenuExpanded}
+                        aria-expanded={identitiesMenuExpanded}
                         className="p-1.5 rounded-md text-slate-500 hover:text-slate-200 hover:bg-slate-800/40 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F6821F]/60"
                       >
-                        {assetsMenuExpanded ? (
+                        {identitiesMenuExpanded ? (
                           <ChevronDown className="w-3.5 h-3.5" />
                         ) : (
                           <ChevronRight className="w-3.5 h-3.5" />
@@ -366,9 +410,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                     )}
                   </div>
 
-                  {!collapsed && assetsMenuExpanded && (
+                  {!collapsed && identitiesMenuExpanded && (
                     <div className="ml-3.5 pl-2 border-l border-slate-800/90 space-y-0.5 py-0.5">
-                      {visibleAssetSubs.map((sub) => {
+                      {visibleIdentitySubs.map((sub) => {
                         const SubIcon = sub.icon;
                         const isSubActive = activeTab === sub.id;
                         return (
@@ -394,6 +438,96 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                             <span className="text-[10px] font-mono text-slate-600 shrink-0">
                               g {sub.shortcut}
                             </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            if (isSettingsGroup) {
+              return (
+                <div key={item.id} className="space-y-0.5">
+                  <div className="flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isSettingsChildActive) {
+                          selectAndCloseMobile(SETTINGS_SUBMENUS[0].id);
+                        }
+                        onExpandSettingsMenu();
+                      }}
+                      title={`${item.label} (g ${item.shortcut})`}
+                      aria-label={item.label}
+                      className={`flex-1 flex items-center ${
+                        collapsed ? 'justify-center px-2 py-2' : 'justify-between gap-2 px-2.5 py-2'
+                      } rounded-md text-xs font-medium transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F6821F]/60 ${
+                        isActive
+                          ? 'bg-[#F6821F]/15 text-white border border-[#F6821F]/40'
+                          : isSettingsChildActive
+                            ? 'bg-slate-800/40 text-slate-100 border border-slate-700/60'
+                            : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/40 border border-transparent'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2.5 min-w-0">
+                        <Icon
+                          className={`w-3.5 h-3.5 shrink-0 ${
+                            isActive || isSettingsChildActive ? 'text-[#F6821F]' : 'text-slate-400'
+                          }`}
+                        />
+                        {!collapsed && <span className="truncate">{item.label}</span>}
+                      </span>
+                      {!collapsed && (
+                        <span className="text-[10px] font-mono text-slate-600 shrink-0">g {item.shortcut}</span>
+                      )}
+                    </button>
+                    {!collapsed && (
+                      <button
+                        type="button"
+                        onClick={onToggleSettingsMenu}
+                        aria-label={
+                          settingsMenuExpanded
+                            ? 'Recolher submenus de Configurações'
+                            : 'Expandir submenus de Configurações'
+                        }
+                        aria-expanded={settingsMenuExpanded}
+                        className="p-1.5 rounded-md text-slate-500 hover:text-slate-200 hover:bg-slate-800/40 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F6821F]/60"
+                      >
+                        {settingsMenuExpanded ? (
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        ) : (
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  {!collapsed && settingsMenuExpanded && (
+                    <div className="ml-3.5 pl-2 border-l border-slate-800/90 space-y-0.5 py-0.5">
+                      {SETTINGS_SUBMENUS.map((sub) => {
+                        const SubIcon = sub.icon;
+                        const isSubActive =
+                          activeTab === sub.id ||
+                          (activeTab === 'settings' && sub.id === 'settings-environment');
+                        return (
+                          <button
+                            key={sub.id}
+                            type="button"
+                            onClick={() => selectAndCloseMobile(sub.id)}
+                            className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[11px] font-medium transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F6821F]/60 ${
+                              isSubActive
+                                ? 'bg-[#F6821F]/15 text-white border border-[#F6821F]/40'
+                                : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/40 border border-transparent'
+                            }`}
+                          >
+                            <SubIcon
+                              className={`w-3 h-3 shrink-0 ${
+                                isSubActive ? 'text-[#F6821F]' : 'text-slate-500'
+                              }`}
+                            />
+                            <span className="truncate">{sub.label}</span>
                           </button>
                         );
                       })}
@@ -541,7 +675,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
                 isSidebarCollapsed ? 'px-2 justify-center' : 'px-5 justify-between gap-2'
               }`}
             >
-              {!isSidebarCollapsed && <BrandHeaderLogo platformName={platformName} />}
+              {!isSidebarCollapsed && <BrandHeader platformName={platformName} />}
               <button
                 type="button"
                 onClick={() => setIsSidebarCollapsed((prev) => !prev)}
@@ -574,7 +708,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
           <aside className="relative z-10 w-[280px] max-w-[85vw] bg-[#0D131F] border-r border-slate-800/90 flex flex-col justify-between h-full">
             <div className="min-h-0 flex-1 overflow-y-auto">
               <div className="min-h-14 py-1.5 px-5 border-b border-slate-800/80 bg-[#090D16] flex items-center justify-between gap-2 sticky top-0 z-10">
-                <BrandHeaderLogo platformName={platformName} />
+                <BrandHeader platformName={platformName} />
                 <button
                   type="button"
                   onClick={() => setMobileMenuOpen(false)}
@@ -607,7 +741,7 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
 
             {(isExpandedView || isSidebarCollapsed) && (
               <div className="shrink-0">
-                <BrandHeaderLogo platformName={platformName} />
+                <BrandHeader platformName={platformName} />
               </div>
             )}
 
@@ -800,9 +934,9 @@ export const DashboardLayout: React.FC<DashboardLayoutProps> = ({
         <footer className="w-full px-4 sm:px-6 py-3.5 border-t border-slate-800/60 flex items-center justify-between gap-4 text-xs text-slate-500">
           <div className="flex items-center gap-3">
             <span>{platformName}</span>
-            <VersionBadge />
+            <VersionBadge version={platformVersion} />
           </div>
-          <span>© 2026, Smart Target</span>
+          <span>© {copyrightYear}, {companyName}</span>
         </footer>
       </div>
     </div>

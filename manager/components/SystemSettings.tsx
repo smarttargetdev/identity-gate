@@ -15,17 +15,20 @@ import {
   Bug,
   ChevronDown,
   Code2,
+  Copyright,
   Database,
   FileCode2,
   Globe,
   KeyRound,
   Layers,
+  Link2,
   Lock,
   RotateCcw,
   Save,
   Server,
   ShieldAlert,
   ShieldCheck,
+  Tag,
   Terminal,
   Volume2,
   VolumeX,
@@ -37,20 +40,40 @@ import { DetailedErrorLog } from './DetailedErrorLog';
 import { InfoTooltip } from './InfoTooltip';
 import type { ExecutionEnvironment, PlatformSystemSettings } from '../domains/Identity';
 
+export type SettingsSection =
+  | 'settings'
+  | 'settings-environment'
+  | 'settings-platform'
+  | 'settings-infra'
+  | 'settings-auth'
+  | 'settings-edge'
+  | 'settings-compliance'
+  | 'settings-errors';
+
 interface SystemSettingsProps {
   token: string;
+  section?: SettingsSection;
   isSuperAdmin: boolean;
   onNotify: (msg: string) => void;
+  onNavigateToSystems?: () => void;
   onSettingsUpdated?: (settings: PlatformSystemSettings) => void;
 }
 
-type SettingsTab = 'environment' | 'infra' | 'auth' | 'edge' | 'compliance' | 'errors';
+type SettingsTab = 'environment' | 'platform' | 'infra' | 'auth' | 'edge' | 'compliance' | 'errors';
 
 const SYSTEM_SETTINGS_QUERY = `
   query AdminSystemSettings {
     systemSettings {
       executionEnvironment
       platformName
+      platformDescription
+      versionNumber
+      versionRelease
+      versionRevision
+      versionBuild
+      versionCodename
+      companyName
+      copyrightYear
       jwtIssuer
       appBaseUrl
       defaultJwtTtlSeconds
@@ -115,6 +138,14 @@ const UPDATE_SETTINGS_MUTATION = `
     updateSystemSettings(input: $input) {
       executionEnvironment
       platformName
+      platformDescription
+      versionNumber
+      versionRelease
+      versionRevision
+      versionBuild
+      versionCodename
+      companyName
+      copyrightYear
       jwtIssuer
       appBaseUrl
       defaultJwtTtlSeconds
@@ -179,6 +210,14 @@ const RESET_SETTINGS_MUTATION = `
     resetSystemSettings {
       executionEnvironment
       platformName
+      platformDescription
+      versionNumber
+      versionRelease
+      versionRevision
+      versionBuild
+      versionCodename
+      companyName
+      copyrightYear
       jwtIssuer
       appBaseUrl
       defaultJwtTtlSeconds
@@ -262,6 +301,7 @@ const TABS: Array<{
   icon: React.ComponentType<{ className?: string }>;
 }> = [
   { id: 'environment', label: 'Ambientes', icon: Server },
+  { id: 'platform', label: 'Plataforma', icon: Globe },
   { id: 'infra', label: 'Infraestrutura', icon: Code2 },
   { id: 'auth', label: 'Autorização & Autenticação', icon: Lock },
   { id: 'edge', label: 'Edge Cache & Auditoria', icon: Database },
@@ -371,18 +411,25 @@ function CompactCombo<T extends string>({
 
 export const SystemSettings: React.FC<SystemSettingsProps> = ({
   token,
+  section = 'settings-environment',
   isSuperAdmin,
   onNotify,
+  onNavigateToSystems,
   onSettingsUpdated,
 }) => {
   const [saved, setSaved] = useState<PlatformSystemSettings | null>(null);
   const [draft, setDraft] = useState<PlatformSystemSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<SettingsTab>('environment');
   const [errorLogCount, setErrorLogCount] = useState<number | null>(null);
   const [confirmProdModal, setConfirmProdModal] = useState(false);
   const [confirmResetModal, setConfirmResetModal] = useState(false);
+
+  const activeTab: SettingsTab = (() => {
+    if (!section || section === 'settings' || section === 'settings-environment') return 'environment';
+    const mapped = section.replace(/^settings-/, '') as SettingsTab;
+    return TABS.some((t) => t.id === mapped) ? mapped : 'environment';
+  })();
 
   const loadSettings = async () => {
     if (!isSuperAdmin) {
@@ -415,6 +462,14 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
     const keys: Array<keyof PlatformSystemSettings> = [
       'executionEnvironment',
       'platformName',
+      'platformDescription',
+      'versionNumber',
+      'versionRelease',
+      'versionRevision',
+      'versionBuild',
+      'versionCodename',
+      'companyName',
+      'copyrightYear',
       'jwtIssuer',
       'appBaseUrl',
       'defaultJwtTtlSeconds',
@@ -492,6 +547,14 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
           input: {
             executionEnvironment: draft.executionEnvironment,
             platformName: draft.platformName,
+            platformDescription: draft.platformDescription,
+            versionNumber: Number(draft.versionNumber),
+            versionRelease: Number(draft.versionRelease),
+            versionRevision: Number(draft.versionRevision),
+            versionBuild: Number(draft.versionBuild),
+            versionCodename: draft.versionCodename,
+            companyName: draft.companyName,
+            copyrightYear: draft.copyrightYear,
             jwtIssuer: draft.jwtIssuer,
             appBaseUrl: draft.appBaseUrl,
             defaultJwtTtlSeconds: Number(draft.defaultJwtTtlSeconds),
@@ -591,8 +654,15 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2">
-          <h1 className="font-display text-xl font-semibold text-white">Configurações do Sistema</h1>
-          <InfoTooltip text="Parametrização global exclusiva do administrador: ambiente de execução, JWT/OAuth 2.0, segurança 2FA, borda SQLite/Cache e conformidade LGPD." />
+          <h1 className="font-display text-xl font-semibold text-white">
+            {activeTabMeta ? `Configurações · ${activeTabMeta.label}` : 'Configurações do Sistema'}
+          </h1>
+          <InfoTooltip text="Parametrização global exclusiva do administrador: ambiente de execução, identidade da plataforma, JWT/OAuth 2.0, segurança 2FA, borda SQLite/Cache e conformidade LGPD." />
+          {activeTab === 'errors' && errorLogCount !== null && errorLogCount > 0 && (
+            <span className="text-xs font-mono tabular-nums text-red-300">
+              · {errorLogCount} registro{errorLogCount > 1 ? 's' : ''}
+            </span>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -664,42 +734,6 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         </div>
       )}
 
-      {/* Configuration Tabs */}
-      <div
-        role="tablist"
-        aria-label="Seções de Configuração"
-        className="flex items-center gap-1 overflow-x-auto border-b border-slate-800/90"
-      >
-        {TABS.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              id={`settings-tab-${tab.id}`}
-              aria-selected={isActive}
-              aria-controls={`settings-panel-${tab.id}`}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-3.5 py-2.5 text-xs font-medium border-b-2 -mb-px transition-colors whitespace-nowrap shrink-0 ${
-                isActive
-                  ? 'border-[#F6821F] text-white bg-[#111827]/70'
-                  : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/30'
-              }`}
-            >
-              <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-[#F6821F]' : 'text-slate-500'}`} />
-              <span>{tab.label}</span>
-              {tab.id === 'errors' && errorLogCount !== null && errorLogCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded bg-red-950/70 border border-red-800/60 text-[10px] font-mono tabular-nums text-red-300">
-                  {errorLogCount}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
       {activeTab === 'errors' && (
         <div role="tabpanel" id="settings-panel-errors" aria-labelledby="settings-tab-errors">
           <DetailedErrorLog
@@ -725,53 +759,74 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
           aria-labelledby={activeTabMeta ? `settings-tab-${activeTabMeta.id}` : undefined}
           className={activeTab === 'errors' ? 'hidden' : 'space-y-6'}
         >
-          {/* 1. Ambientes de Execução & Identidade da Plataforma */}
+          {/* 1. Ambientes de Execução */}
           {activeTab === 'environment' && (
+            <section className="bg-[#111827] border border-slate-800/90 rounded-lg p-6 space-y-5">
+              <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                <Server className="w-4 h-4 text-[#F6821F]" />
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-white">Ambientes de Execução</h2>
+                  <InfoTooltip text="Define o comportamento da tela de autenticação, exposição de contas de demonstração e bloqueio de atalhos de teste." />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {ENVIRONMENTS.map((envOpt) => {
+                  const selected = draft.executionEnvironment === envOpt.value;
+                  return (
+                    <button
+                      key={envOpt.value}
+                      type="button"
+                      onClick={() => setDraft({ ...draft, executionEnvironment: envOpt.value })}
+                      className={`text-left p-3.5 rounded-md border transition-colors ${
+                        selected
+                          ? 'bg-[#F6821F]/15 border-[#F6821F] text-white'
+                          : 'bg-[#090D16] border-slate-800 text-slate-300 hover:border-slate-600'
+                      }`}
+                    >
+                      <div className="text-xs font-semibold">{envOpt.value}</div>
+                      <div className="text-[11px] text-slate-400 mt-1 leading-relaxed">{envOpt.description}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* 1a. Plataforma (Identidade da Plataforma, Versão & Direitos Autorais) */}
+          {activeTab === 'platform' && (
             <>
               <section className="bg-[#111827] border border-slate-800/90 rounded-lg p-6 space-y-5">
-                <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
-                  <Server className="w-4 h-4 text-[#F6821F]" />
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-sm font-semibold text-white">Ambientes de Execução</h2>
-                    <InfoTooltip text="Define o comportamento da tela de autenticação, exposição de contas de demonstração e bloqueio de atalhos de teste." />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {ENVIRONMENTS.map((envOpt) => {
-                    const selected = draft.executionEnvironment === envOpt.value;
-                    return (
-                      <button
-                        key={envOpt.value}
-                        type="button"
-                        onClick={() => setDraft({ ...draft, executionEnvironment: envOpt.value })}
-                        className={`text-left p-3.5 rounded-md border transition-colors ${
-                          selected
-                            ? 'bg-[#F6821F]/15 border-[#F6821F] text-white'
-                            : 'bg-[#090D16] border-slate-800 text-slate-300 hover:border-slate-600'
-                        }`}
-                      >
-                        <div className="text-xs font-semibold">{envOpt.value}</div>
-                        <div className="text-[11px] text-slate-400 mt-1 leading-relaxed">{envOpt.description}</div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-
-              <section className="bg-[#111827] border border-slate-800/90 rounded-lg p-6 space-y-5">
-                <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
-                  <Globe className="w-4 h-4 text-[#F6821F]" />
-                  <div className="flex items-center gap-2">
+                    <Globe className="w-4 h-4 text-[#F6821F]" />
                     <h2 className="text-sm font-semibold text-white">Identidade da Plataforma</h2>
-                    <InfoTooltip text="Define o nome exibido da plataforma, o emissor OIDC/JWT (iss) e a URL base para callbacks OAuth 2.0." />
+                    <InfoTooltip text="Define o nome exibido e a descrição da plataforma (lidos e gravados no manifest.json em sincronia com o sistema principal), o emissor OIDC/JWT (iss) e a URL base para callbacks OAuth 2.0." />
                   </div>
+                  {onNavigateToSystems ? (
+                    <button
+                      type="button"
+                      onClick={onNavigateToSystems}
+                      className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
+                    >
+                      <Link2 className="w-3.5 h-3.5 text-[#F6821F]" />
+                      <span>Sistema principal: <span className="font-mono text-slate-300">identity-secure-gate</span></span>
+                    </button>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+                      <Link2 className="w-3.5 h-3.5 text-[#F6821F]" />
+                      <span>Sistema principal: <span className="font-mono text-slate-300">identity-secure-gate</span></span>
+                    </span>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Nome da Plataforma</label>
+                    <label htmlFor="settings-platform-name" className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Nome da Plataforma
+                    </label>
                     <input
+                      id="settings-platform-name"
                       type="text"
                       required
                       value={draft.platformName}
@@ -780,8 +835,11 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Emissor de Token</label>
+                    <label htmlFor="settings-jwt-issuer" className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Emissor de Token
+                    </label>
                     <input
+                      id="settings-jwt-issuer"
                       type="text"
                       required
                       value={draft.jwtIssuer}
@@ -790,15 +848,152 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                    <label htmlFor="settings-app-base-url" className="block text-xs font-medium text-slate-300 mb-1.5">
                       Servidor de Autenticação (Callback)
                     </label>
                     <input
+                      id="settings-app-base-url"
                       type="text"
                       value={draft.appBaseUrl}
                       onChange={(e) => setDraft({ ...draft, appBaseUrl: e.target.value })}
                       placeholder="Auto-detectar via Host / Proxy"
                       className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                  <div className="md:col-span-3">
+                    <label htmlFor="settings-platform-description" className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Descrição
+                    </label>
+                    <textarea
+                      id="settings-platform-description"
+                      rows={3}
+                      required
+                      value={draft.platformDescription}
+                      onChange={(e) => setDraft({ ...draft, platformDescription: e.target.value })}
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs text-white leading-relaxed"
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <section className="bg-[#111827] border border-slate-800/90 rounded-lg p-6 space-y-5">
+                <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                  <Tag className="w-4 h-4 text-[#F6821F]" />
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-white">Versão</h2>
+                    <InfoTooltip text="Define os campos de versionamento da plataforma (Número, Distribuição, Revisão, Compilação e Apelido), lidos e gravados diretamente no manifest.json." />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                  <div>
+                    <label htmlFor="settings-version-number" className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Número
+                    </label>
+                    <input
+                      id="settings-version-number"
+                      type="number"
+                      min={0}
+                      required
+                      value={draft.versionNumber}
+                      onChange={(e) => setDraft({ ...draft, versionNumber: Number(e.target.value) })}
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="settings-version-release" className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Distribuição
+                    </label>
+                    <input
+                      id="settings-version-release"
+                      type="number"
+                      min={0}
+                      required
+                      value={draft.versionRelease}
+                      onChange={(e) => setDraft({ ...draft, versionRelease: Number(e.target.value) })}
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="settings-version-revision" className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Revisão
+                    </label>
+                    <input
+                      id="settings-version-revision"
+                      type="number"
+                      min={0}
+                      required
+                      value={draft.versionRevision}
+                      onChange={(e) => setDraft({ ...draft, versionRevision: Number(e.target.value) })}
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="settings-version-build" className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Compilação
+                    </label>
+                    <input
+                      id="settings-version-build"
+                      type="number"
+                      min={0}
+                      required
+                      value={draft.versionBuild}
+                      onChange={(e) => setDraft({ ...draft, versionBuild: Number(e.target.value) })}
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="settings-version-codename" className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Apelido
+                    </label>
+                    <input
+                      id="settings-version-codename"
+                      type="text"
+                      required
+                      value={draft.versionCodename}
+                      onChange={(e) => setDraft({ ...draft, versionCodename: e.target.value })}
+                      placeholder="genesis"
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono text-white"
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <section className="bg-[#111827] border border-slate-800/90 rounded-lg p-6 space-y-5">
+                <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+                  <Copyright className="w-4 h-4 text-[#F6821F]" />
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-white">Direitos Autorais</h2>
+                    <InfoTooltip text="Define a empresa e o ano exibidos no rodapé de direitos autorais da plataforma e das telas de autenticação." />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="settings-company-name" className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Empresa
+                    </label>
+                    <input
+                      id="settings-company-name"
+                      type="text"
+                      required
+                      value={draft.companyName}
+                      onChange={(e) => setDraft({ ...draft, companyName: e.target.value })}
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs text-white"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="settings-copyright-year" className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Ano
+                    </label>
+                    <input
+                      id="settings-copyright-year"
+                      type="text"
+                      required
+                      value={draft.copyrightYear}
+                      onChange={(e) => setDraft({ ...draft, copyrightYear: e.target.value })}
+                      placeholder="2026"
+                      className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
                     />
                   </div>
                 </div>

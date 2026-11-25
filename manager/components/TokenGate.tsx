@@ -18,6 +18,7 @@ import {
   ChevronDown,
   Copy,
   ExternalLink,
+  Globe,
   KeyRound,
   Lock,
   RefreshCw,
@@ -27,7 +28,7 @@ import {
   X,
 } from 'lucide-react';
 import type { ExecutionEnvironment, PublicPlatformConfig } from '../domains/Identity';
-import { BrandHeaderLogo } from './BrandHeaderLogo';
+import { BrandHeader } from './BrandHeader';
 import { VersionBadge } from './VersionBadge';
 
 interface PublicSystemItem {
@@ -43,6 +44,13 @@ interface PublicSystemItem {
   allowedMfaMethods: string[];
   allowedIdps: string[];
   edgeCacheTtl: number;
+}
+
+interface PublicIdpItem {
+  id: string;
+  name: string;
+  provider_type: string;
+  simulation_mode: number;
 }
 
 interface MfaPendingState {
@@ -95,12 +103,16 @@ const QUICK_ACCOUNTS = [
   {
     id: 'admin',
     label: 'Administrador Global',
+    displayName: 'Osvandir Junior',
+    loginIdentifier: 'administrator',
     email: 'administrator@smarttarget.com.br',
     password: 'Vektor@2026!',
   },
   {
     id: 'clara',
     label: 'Operador do Sistema',
+    displayName: 'Clara Silva',
+    loginIdentifier: 'operator',
     email: 'operator@smarttarget.com.br',
     password: 'Clara@2026!',
   },
@@ -150,9 +162,13 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
   const hasLockedSystem = Boolean(lockedSystemParam);
 
   const [systems, setSystems] = useState<PublicSystemItem[]>([]);
+  const [idps, setIdps] = useState<PublicIdpItem[]>([]);
   const [systemsLoaded, setSystemsLoaded] = useState(false);
   const [selectedSlug, setSelectedSlug] = useState('');
   const [platformName, setPlatformName] = useState('Identity Secure Gate');
+  const [platformVersion, setPlatformVersion] = useState<PublicPlatformConfig['version']>();
+  const [companyName, setCompanyName] = useState('Smart Target');
+  const [copyrightYear, setCopyrightYear] = useState('2026');
   const [executionEnvironment, setExecutionEnvironment] = useState<ExecutionEnvironment | null>(null);
 
   const [email, setEmail] = useState('');
@@ -161,6 +177,10 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
   const [mfaMethod, setMfaMethod] = useState<'totp' | 'sms' | 'backup_code'>('totp');
   const [mfaCode, setMfaCode] = useState('');
   const [smsPreview, setSmsPreview] = useState<string | null>(null);
+
+  const [idpModal, setIdpModal] = useState<{ providerType: string; name: string } | null>(null);
+  const [idpEmail, setIdpEmail] = useState('');
+  const [idpName, setIdpName] = useState('Usuário Federado');
 
   const [issuedResult, setIssuedResult] = useState<IssuedTokenResult | null>(null);
   const [copiedField, setCopiedField] = useState<'jwt' | 'json' | 'url' | null>(null);
@@ -172,10 +192,17 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const userComboRef = useRef<HTMLDivElement>(null);
   const userInputRef = useRef<HTMLInputElement>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
   const suppressFocusOpenRef = useRef(false);
+  const selectedSlugRef = useRef(selectedSlug);
+  const finalizeTokenResultRef = useRef<(data: IssuedTokenResult) => Promise<void>>(async () => {});
 
   // Embedded helper state for testing autonomous GET / POST launches
   const [testSystemSlug, setTestSystemSlug] = useState('identity-gate');
+
+  useEffect(() => {
+    selectedSlugRef.current = selectedSlug;
+  }, [selectedSlug]);
 
   useEffect(() => {
     const handleClickOutside = (ev: MouseEvent) => {
@@ -193,9 +220,14 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
   useEffect(() => {
     fetch('/api/public/systems')
       .then((r) => r.json())
-      .then((data: { platformConfig?: PublicPlatformConfig; systems?: PublicSystemItem[] }) => {
+      .then((data: {
+        platformConfig?: PublicPlatformConfig;
+        systems?: PublicSystemItem[];
+        identityProviders?: PublicIdpItem[];
+      }) => {
         const loadedSystems = data.systems || [];
         setSystemsLoaded(true);
+        setIdps(data.identityProviders || []);
         if (lockedSystemParam) {
           const needle = lockedSystemParam.toLowerCase();
           const matched = loadedSystems.find(
@@ -223,9 +255,19 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
         if (cfg?.platformName) {
           setPlatformName(cfg.platformName);
         }
+        if (cfg?.version) {
+          setPlatformVersion(cfg.version);
+        }
+        if (cfg?.companyName) {
+          setCompanyName(cfg.companyName);
+        }
+        if (cfg?.copyrightYear) {
+          setCopyrightYear(cfg.copyrightYear);
+        }
         if (env === 'Desenvolvimento') {
           setEmail((curr) => curr || 'administrator@smarttarget.com.br');
           setPassword((curr) => curr || 'Vektor@2026!');
+          setIdpEmail((curr) => curr || 'administrator@smarttarget.com.br');
         }
       })
       .catch(() => {
@@ -234,17 +276,100 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
       });
   }, [lockedSystemParam]);
 
+  useEffect(() => {
+    const handlePopupMessage = async (ev: MessageEvent) => {
+      const origin = ev.origin || '';
+      if (
+        origin !== window.location.origin &&
+        !origin.endsWith('.run.app') &&
+        !origin.includes('localhost')
+      ) {
+        return;
+      }
+      if (ev.data?.type === 'VEKTOR_IDP_ERROR') {
+        setError(ev.data.error || 'Falha na autenticação externa.');
+        return;
+      }
+      if (ev.data?.type === 'VEKTOR_IDP_CALLBACK' && ev.data?.ticket) {
+        const targetSlug = selectedSlugRef.current;
+        if (!targetSlug) {
+          setError('Selecione ou informe um sistema ativo válido.');
+          return;
+        }
+        setLoading(true);
+        setError(null);
+        try {
+          const res = await fetch('/api/auth/idp/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ticket: ev.data.ticket,
+              systemSlug: targetSlug,
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Falha ao concluir autenticação externa.');
+
+          if (data.requiresMfa) {
+            setMfaPending({
+              mfaToken: data.mfaToken,
+              availableMethods: data.availableMethods,
+              preferredMethod: data.preferredMethod,
+              phoneMasked: data.phoneMasked,
+              systemName: data.system?.name || targetSlug,
+            });
+            const pref = data.preferredMethod;
+            setMfaMethod(pref === 'sms' || pref === 'totp' || pref === 'backup_code' ? pref : 'totp');
+            return;
+          }
+
+          await finalizeTokenResultRef.current({
+            accessToken: data.accessToken,
+            tokenType: data.tokenType || 'Bearer',
+            expiresIn: data.expiresIn,
+            expiresAt: data.expiresAt,
+            system: data.system,
+            user: data.user,
+          });
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Erro ao concluir autenticação externa.');
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+    const onMessage = (ev: MessageEvent) => {
+      void handlePopupMessage(ev);
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
   const currentSystem = useMemo(
     () => systems.find((s) => s.slug === selectedSlug) || null,
     [systems, selectedSlug]
   );
 
+  const availableIdps = useMemo(
+    () => idps.filter((idp) => !currentSystem || currentSystem.allowedIdps.includes(idp.provider_type)),
+    [idps, currentSystem]
+  );
+
   const lockedSystemInvalid = hasLockedSystem && systemsLoaded && !currentSystem;
 
   const showDemoPanel = executionEnvironment !== null && executionEnvironment !== 'Produção';
-  const matchedQuickAccount = showDemoPanel
-    ? QUICK_ACCOUNTS.find((acc) => acc.email.toLowerCase() === email.trim().toLowerCase())
-    : undefined;
+  const findMatchedQuickAccount = (value: string) => {
+    if (!showDemoPanel) return undefined;
+    const needle = value.trim().toLowerCase();
+    if (!needle) return undefined;
+    return QUICK_ACCOUNTS.find(
+      (acc) =>
+        acc.email.toLowerCase() === needle ||
+        acc.loginIdentifier.toLowerCase() === needle
+    );
+  };
+
+  const matchedQuickAccount = findMatchedQuickAccount(email);
   const isQuickAccount = Boolean(matchedQuickAccount);
 
   const handleSelectQuickAccount = (acc: (typeof QUICK_ACCOUNTS)[number]) => {
@@ -256,18 +381,26 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
   };
 
   const handleEmailInputChange = (nextValue: string) => {
-    const nextMatched = showDemoPanel
-      ? QUICK_ACCOUNTS.find((acc) => acc.email.toLowerCase() === nextValue.trim().toLowerCase())
-      : undefined;
+    const nextMatched = findMatchedQuickAccount(nextValue);
     setEmail(nextValue);
     setUserDropdownOpen(false);
-    setPassword(nextMatched ? nextMatched.password : '');
+    if (nextMatched) {
+      setPassword(nextMatched.password);
+    } else if (!nextValue.trim() || isQuickAccount) {
+      setPassword('');
+      if (passwordInputRef.current) {
+        passwordInputRef.current.value = '';
+      }
+    }
   };
 
   const handleSwitchToManualEntry = () => {
     suppressFocusOpenRef.current = true;
     setEmail('');
     setPassword('');
+    if (passwordInputRef.current) {
+      passwordInputRef.current.value = '';
+    }
     setError(null);
     setUserDropdownOpen(false);
     window.setTimeout(() => {
@@ -301,6 +434,88 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
     setMfaPending(null);
     setMfaCode('');
     onNotify?.(`Token JWT gerado para ${data.user.email} (${data.system.slug}).`);
+  };
+  finalizeTokenResultRef.current = finalizeTokenResult;
+
+  const handleTriggerIdp = async (idp: PublicIdpItem) => {
+    if (lockedSystemInvalid || !selectedSlug) {
+      setError('Selecione ou informe um sistema ativo válido.');
+      return;
+    }
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/auth/idp/${idp.provider_type}/url?systemSlug=${encodeURIComponent(selectedSlug)}`
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao iniciar IdP externo.');
+      }
+      if (data.simulation) {
+        setIdpModal({ providerType: idp.provider_type, name: idp.name });
+        return;
+      }
+      if (data.url) {
+        const popup = window.open(data.url, 'vektor_idp_oauth', 'width=600,height=700');
+        if (!popup) {
+          setError('O navegador bloqueou o pop-up de autenticação. Permita pop-ups para continuar.');
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao iniciar IdP externo.');
+    }
+  };
+
+  const handleConfirmIdpSimulation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!idpModal) return;
+    if (lockedSystemInvalid || !selectedSlug) {
+      setError('Selecione ou informe um sistema ativo válido.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/auth/idp/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          providerType: idpModal.providerType,
+          externalEmail: idpEmail,
+          externalName: idpName,
+          systemSlug: selectedSlug,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Falha na federação externa.');
+      setIdpModal(null);
+
+      if (data.requiresMfa) {
+        setMfaPending({
+          mfaToken: data.mfaToken,
+          availableMethods: data.availableMethods,
+          preferredMethod: data.preferredMethod,
+          phoneMasked: data.phoneMasked,
+          systemName: data.system?.name || selectedSlug,
+        });
+        const pref = data.preferredMethod;
+        setMfaMethod(pref === 'sms' || pref === 'totp' || pref === 'backup_code' ? pref : 'totp');
+        return;
+      }
+
+      await finalizeTokenResult({
+        accessToken: data.accessToken,
+        tokenType: data.tokenType || 'Bearer',
+        expiresIn: data.expiresIn,
+        expiresAt: data.expiresAt,
+        system: data.system,
+        user: data.user,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro na federação IdP.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmitCredentials = async (e: React.FormEvent) => {
@@ -592,7 +807,7 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
             </p>
           </div>
 
-          <form onSubmit={handleSubmitCredentials} className="space-y-4">
+          <form onSubmit={handleSubmitCredentials} autoComplete="off" className="space-y-4">
             <div ref={systemComboRef} className="relative">
               <div className="flex items-center justify-between mb-1.5">
                 <label htmlFor="token-system-field" className="block text-xs font-medium text-slate-300">
@@ -710,8 +925,9 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
                 <input
                   ref={userInputRef}
                   id="token-user-input"
-                  type="email"
+                  type="text"
                   required
+                  autoComplete="off"
                   role="combobox"
                   aria-expanded={userDropdownOpen}
                   aria-autocomplete="list"
@@ -722,12 +938,12 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
                       suppressFocusOpenRef.current = false;
                       return;
                     }
-                    if (showDemoPanel) setUserDropdownOpen(true);
+                    if (showDemoPanel || availableIdps.length > 0) setUserDropdownOpen(true);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') setUserDropdownOpen(false);
                   }}
-                  placeholder="Digite o e-mail do usuário"
+                  placeholder="Selecione uma conta ou digite o login / e-mail"
                   className="w-full bg-[#090D16] border border-slate-700/80 rounded-md pl-3.5 pr-16 py-2.5 text-sm text-white focus:outline-none focus:border-[#F6821F]"
                 />
                 <div className="absolute right-2 flex items-center gap-1">
@@ -741,27 +957,25 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
                       <X className="w-3.5 h-3.5" />
                     </button>
                   )}
-                  {showDemoPanel && (
-                    <button
-                      type="button"
-                      onClick={() => setUserDropdownOpen((prev) => !prev)}
-                      aria-label="Abrir opções de usuário"
-                      className="p-1 text-slate-400 hover:text-white rounded transition-colors"
-                    >
-                      <ChevronDown
-                        className={`w-4 h-4 transition-transform ${userDropdownOpen ? 'rotate-180' : ''}`}
-                      />
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => setUserDropdownOpen((prev) => !prev)}
+                    aria-label="Abrir opções de usuário"
+                    className="p-1 text-slate-400 hover:text-white rounded transition-colors"
+                  >
+                    <ChevronDown
+                      className={`w-4 h-4 transition-transform ${userDropdownOpen ? 'rotate-180' : ''}`}
+                    />
+                  </button>
                 </div>
               </div>
 
               {userDropdownOpen && (
-                <div className="absolute z-30 left-0 right-0 mt-1.5 bg-[#090D16] border border-slate-700/90 rounded-md shadow-xl overflow-hidden">
+                <div className="absolute z-30 left-0 right-0 mt-1.5 bg-[#090D16] border border-slate-700/90 rounded-md shadow-xl overflow-hidden max-h-80 overflow-y-auto">
                   {showDemoPanel && (
                     <>
                       <div className="px-3 py-1.5 text-[11px] font-medium text-[#F6821F] bg-slate-900/80 border-b border-slate-800/80">
-                        Contas de Demonstração
+                        Contas de {executionEnvironment}
                       </div>
                       <div className="divide-y divide-slate-800/60">
                         {QUICK_ACCOUNTS.map((acc) => {
@@ -777,9 +991,16 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
                                   : 'hover:bg-slate-800/60 text-slate-200'
                               }`}
                             >
-                              <div className="min-w-0">
-                                <div className="text-xs font-medium truncate">{acc.label}</div>
-                                <div className="text-[11px] font-mono text-slate-400 truncate">{acc.email}</div>
+                              <div className="min-w-0 space-y-0.5">
+                                <div className="text-xs font-bold text-white truncate">
+                                  {acc.displayName}
+                                </div>
+                                <div className="text-[11px] font-mono text-slate-400 truncate">
+                                  {acc.loginIdentifier}
+                                </div>
+                                <div className="text-[10px] font-mono text-slate-400 truncate">
+                                  {acc.email}
+                                </div>
                               </div>
                               {isSelected && <Check className="w-3.5 h-3.5 text-[#F6821F] shrink-0" />}
                             </button>
@@ -788,6 +1009,40 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
                       </div>
                     </>
                   )}
+
+                  {availableIdps.length > 0 && (
+                    <>
+                      <div
+                        className={`px-3 py-1.5 text-[11px] font-medium text-[#F6821F] bg-slate-900/80 border-b border-slate-800/80 ${
+                          showDemoPanel ? 'border-t border-slate-800/80' : ''
+                        }`}
+                      >
+                        Provedores de Identidade
+                      </div>
+                      <div className="divide-y divide-slate-800/60">
+                        {availableIdps.map((idp) => (
+                          <button
+                            key={idp.id}
+                            type="button"
+                            title={idp.simulation_mode ? `${idp.name} (Simulado)` : `${idp.name} (Produção)`}
+                            onClick={() => {
+                              setUserDropdownOpen(false);
+                              void handleTriggerIdp(idp);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-left text-slate-200 hover:bg-slate-800/60 transition-colors"
+                          >
+                            <Globe
+                              className={`w-3.5 h-3.5 shrink-0 ${
+                                idp.simulation_mode ? 'text-slate-400' : 'text-emerald-400'
+                              }`}
+                            />
+                            <span className="text-xs font-medium text-white truncate">{idp.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
                   <button
                     type="button"
                     onClick={handleSwitchToManualEntry}
@@ -812,15 +1067,17 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
                 )}
               </div>
               <input
+                ref={passwordInputRef}
                 id="token-password-input"
                 type="password"
                 required
+                autoComplete="new-password"
                 readOnly={isQuickAccount}
                 value={password}
                 onChange={(e) => {
                   if (!isQuickAccount) setPassword(e.target.value);
                 }}
-                placeholder="••••••••"
+                placeholder="Digite a senha"
                 className={`w-full border rounded-md px-3.5 py-2.5 text-sm focus:outline-none ${
                   isQuickAccount
                     ? 'bg-[#090D16]/60 border-slate-800 text-slate-400 cursor-not-allowed'
@@ -1002,6 +1259,69 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
           </form>
         </div>
       )}
+
+      {idpModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-[#111827] border border-slate-700 rounded-lg p-6 space-y-5">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="font-display text-base font-semibold text-white">
+                  Federação Externa · {idpModal.name}
+                </h3>
+                <p className="text-xs text-slate-400 mt-1">
+                  Simule o retorno OIDC/SAML deste provedor para testar provisionamento JIT e emissão de JWT.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIdpModal(null)}
+                className="text-xs text-slate-400 hover:text-white"
+              >
+                Fechar
+              </button>
+            </div>
+            <form onSubmit={handleConfirmIdpSimulation} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">E-mail retornado pelo IdP</label>
+                <input
+                  type="email"
+                  required
+                  value={idpEmail}
+                  onChange={(e) => setIdpEmail(e.target.value)}
+                  placeholder="usuario@empresa.com"
+                  className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-sm text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Nome exibido</label>
+                <input
+                  type="text"
+                  required
+                  value={idpName}
+                  onChange={(e) => setIdpName(e.target.value)}
+                  className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-sm text-white"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIdpModal(null)}
+                  className="px-4 py-2 text-xs text-slate-300 hover:text-white rounded-md border border-slate-700"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-2 text-xs font-semibold bg-[#F6821F] text-slate-950 rounded-md"
+                >
+                  Concluir Login Federado
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -1009,7 +1329,7 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
     return (
       <div className="min-h-screen bg-[#090D16] text-slate-100 flex flex-col justify-between">
         <header className="min-h-14 py-1.5 px-6 border-b border-slate-800/80 bg-[#090D16] flex items-center justify-between gap-6 shrink-0">
-          <BrandHeaderLogo platformName={platformName} />
+          <BrandHeader platformName={platformName} />
           <div className="flex items-center gap-4 text-xs text-slate-400">
             <a
               href="/"
@@ -1027,9 +1347,9 @@ export const TokenGate: React.FC<TokenGateProps> = ({ standalone = false, onNoti
         <footer className="w-full px-6 py-4 border-t border-slate-800/60 flex items-center justify-between gap-4 text-xs text-slate-500">
           <div className="flex items-center gap-3">
             <span>{platformName} · Portal Autônomo de Token JWT</span>
-            <VersionBadge />
+            <VersionBadge version={platformVersion} />
           </div>
-          <span>© 2026, Smart Target</span>
+          <span>© {copyrightYear}, {companyName}</span>
         </footer>
       </div>
     );

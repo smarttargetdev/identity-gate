@@ -12,7 +12,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Shield, KeyRound, Smartphone, Lock, ArrowRight, Globe, AlertCircle, CheckCircle2, ChevronDown, X, Check } from 'lucide-react';
 import type { AuthSessionState, ExecutionEnvironment, PublicPlatformConfig } from '../domains/Identity';
-import { BrandHeaderLogo } from './BrandHeaderLogo';
+import { BrandHeader } from './BrandHeader';
 import { VersionBadge } from './VersionBadge';
 
 interface PublicSystemItem {
@@ -52,12 +52,16 @@ const QUICK_ACCOUNTS = [
   {
     id: 'admin',
     label: 'Administrador Global',
+    displayName: 'Osvandir Junior',
+    loginIdentifier: 'administrator',
     email: 'administrator@smarttarget.com.br',
     password: 'Vektor@2026!',
   },
   {
     id: 'clara',
     label: 'Operador do Sistema',
+    displayName: 'Clara Silva',
+    loginIdentifier: 'operator',
     email: 'operator@smarttarget.com.br',
     password: 'Clara@2026!',
   },
@@ -70,6 +74,9 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
   const [idps, setIdps] = useState<PublicIdpItem[]>([]);
   const selectedSlug = LOGIN_SYSTEM_SLUG;
   const [platformName, setPlatformName] = useState('Identity Secure Gate');
+  const [platformVersion, setPlatformVersion] = useState<PublicPlatformConfig['version']>();
+  const [companyName, setCompanyName] = useState('Smart Target');
+  const [copyrightYear, setCopyrightYear] = useState('2026');
   const [executionEnvironment, setExecutionEnvironment] = useState<ExecutionEnvironment | null>(null);
 
   const [email, setEmail] = useState('');
@@ -89,6 +96,7 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const userComboRef = useRef<HTMLDivElement>(null);
   const userInputRef = useRef<HTMLInputElement>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
   const suppressFocusOpenRef = useRef(false);
   const selectedSlugRef = useRef(selectedSlug);
   const onAuthenticatedRef = useRef(onAuthenticated);
@@ -127,6 +135,15 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
         setExecutionEnvironment(env);
         if (cfg?.platformName) {
           setPlatformName(cfg.platformName);
+        }
+        if (cfg?.version) {
+          setPlatformVersion(cfg.version);
+        }
+        if (cfg?.companyName) {
+          setCompanyName(cfg.companyName);
+        }
+        if (cfg?.copyrightYear) {
+          setCopyrightYear(cfg.copyrightYear);
         }
         if (env === 'Desenvolvimento') {
           setEmail((curr) => curr || 'administrator@smarttarget.com.br');
@@ -204,10 +221,22 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
   }, []);
 
   const currentSystem = systems.find((s) => s.slug === selectedSlug);
+  const availableIdps = idps.filter(
+    (idp) => !currentSystem || currentSystem.allowedIdps.includes(idp.provider_type)
+  );
   const showDemoPanel = executionEnvironment !== null && executionEnvironment !== 'Produção';
-  const matchedQuickAccount = showDemoPanel
-    ? QUICK_ACCOUNTS.find((acc) => acc.email.toLowerCase() === email.trim().toLowerCase())
-    : undefined;
+  const findMatchedQuickAccount = (value: string) => {
+    if (!showDemoPanel) return undefined;
+    const needle = value.trim().toLowerCase();
+    if (!needle) return undefined;
+    return QUICK_ACCOUNTS.find(
+      (acc) =>
+        acc.email.toLowerCase() === needle ||
+        acc.loginIdentifier.toLowerCase() === needle
+    );
+  };
+
+  const matchedQuickAccount = findMatchedQuickAccount(email);
   const isQuickAccount = Boolean(matchedQuickAccount);
 
   const handleSelectQuickAccount = (acc: (typeof QUICK_ACCOUNTS)[number]) => {
@@ -219,18 +248,26 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
   };
 
   const handleEmailInputChange = (nextValue: string) => {
-    const nextMatched = showDemoPanel
-      ? QUICK_ACCOUNTS.find((acc) => acc.email.toLowerCase() === nextValue.trim().toLowerCase())
-      : undefined;
+    const nextMatched = findMatchedQuickAccount(nextValue);
     setEmail(nextValue);
     setUserDropdownOpen(false);
-    setPassword(nextMatched ? nextMatched.password : '');
+    if (nextMatched) {
+      setPassword(nextMatched.password);
+    } else if (!nextValue.trim() || isQuickAccount) {
+      setPassword('');
+      if (passwordInputRef.current) {
+        passwordInputRef.current.value = '';
+      }
+    }
   };
 
   const handleSwitchToManualEntry = () => {
     suppressFocusOpenRef.current = true;
     setEmail('');
     setPassword('');
+    if (passwordInputRef.current) {
+      passwordInputRef.current.value = '';
+    }
     setError(null);
     setUserDropdownOpen(false);
     window.setTimeout(() => {
@@ -408,7 +445,7 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
   return (
     <div className="min-h-screen bg-[#090D16] text-slate-100 flex flex-col justify-between">
       <header className="min-h-14 py-1.5 px-6 border-b border-slate-800/80 bg-[#090D16] flex items-center justify-between gap-6 shrink-0">
-        <BrandHeaderLogo platformName={platformName} />
+        <BrandHeader platformName={platformName} />
         <div className="hidden sm:flex items-center gap-3 text-xs text-slate-400">
           <span>OAuth 2.0 / OIDC</span>
           <span aria-hidden="true">·</span>
@@ -442,7 +479,7 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
                 </p>
               </div>
 
-              <form onSubmit={handleSubmitCredentials} className="space-y-4">
+              <form onSubmit={handleSubmitCredentials} autoComplete="off" className="space-y-4">
 
                 {error && (
                   <div className="flex items-start gap-2.5 p-3 rounded-md bg-red-950/40 border border-red-800/60 text-xs text-red-200">
@@ -466,8 +503,9 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
                     <input
                       ref={userInputRef}
                       id="login-user-input"
-                      type="email"
+                      type="text"
                       required
+                      autoComplete="off"
                       role="combobox"
                       aria-expanded={userDropdownOpen}
                       aria-autocomplete="list"
@@ -478,12 +516,12 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
                           suppressFocusOpenRef.current = false;
                           return;
                         }
-                        if (showDemoPanel) setUserDropdownOpen(true);
+                        if (showDemoPanel || availableIdps.length > 0) setUserDropdownOpen(true);
                       }}
                       onKeyDown={(e) => {
                         if (e.key === 'Escape') setUserDropdownOpen(false);
                       }}
-                      placeholder="Selecione uma conta rápida ou digite o e-mail"
+                      placeholder="Selecione uma conta ou digite o login / e-mail"
                       className="w-full bg-[#090D16] border border-slate-700/80 rounded-md pl-3.5 pr-16 py-2.5 text-sm text-white focus:outline-none focus:border-[#F6821F]"
                     />
                     <div className="absolute right-2 flex items-center gap-1">
@@ -511,7 +549,7 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
                   </div>
 
                   {userDropdownOpen && (
-                    <div className="absolute z-30 left-0 right-0 mt-1.5 bg-[#090D16] border border-slate-700/90 rounded-md shadow-xl overflow-hidden">
+                    <div className="absolute z-30 left-0 right-0 mt-1.5 bg-[#090D16] border border-slate-700/90 rounded-md shadow-xl overflow-hidden max-h-80 overflow-y-auto">
                       {showDemoPanel && (
                         <>
                           <div className="px-3 py-1.5 text-[11px] font-medium text-[#F6821F] bg-slate-900/80 border-b border-slate-800/80">
@@ -531,9 +569,14 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
                                       : 'hover:bg-slate-800/60 text-slate-200'
                                   }`}
                                 >
-                                  <div className="min-w-0">
-                                    <div className="text-xs font-medium truncate">{acc.label}</div>
+                                  <div className="min-w-0 space-y-0.5">
+                                    <div className="text-xs font-bold text-white truncate">
+                                      {acc.displayName}
+                                    </div>
                                     <div className="text-[11px] font-mono text-slate-400 truncate">
+                                      {acc.loginIdentifier}
+                                    </div>
+                                    <div className="text-[10px] font-mono text-slate-400 truncate">
                                       {acc.email}
                                     </div>
                                   </div>
@@ -544,6 +587,40 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
                           </div>
                         </>
                       )}
+
+                      {availableIdps.length > 0 && (
+                        <>
+                          <div
+                            className={`px-3 py-1.5 text-[11px] font-medium text-[#F6821F] bg-slate-900/80 border-b border-slate-800/80 ${
+                              showDemoPanel ? 'border-t border-slate-800/80' : ''
+                            }`}
+                          >
+                            Provedores de Identidade
+                          </div>
+                          <div className="divide-y divide-slate-800/60">
+                            {availableIdps.map((idp) => (
+                              <button
+                                key={idp.id}
+                                type="button"
+                                title={idp.simulation_mode ? `${idp.name} (Simulado)` : `${idp.name} (Produção)`}
+                                onClick={() => {
+                                  setUserDropdownOpen(false);
+                                  void handleTriggerIdp(idp);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-left text-slate-200 hover:bg-slate-800/60 transition-colors"
+                              >
+                                <Globe
+                                  className={`w-3.5 h-3.5 shrink-0 ${
+                                    idp.simulation_mode ? 'text-slate-400' : 'text-emerald-400'
+                                  }`}
+                                />
+                                <span className="text-xs font-medium text-white truncate">{idp.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
+
                       <button
                         type="button"
                         onClick={handleSwitchToManualEntry}
@@ -568,15 +645,17 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
                     )}
                   </div>
                   <input
+                    ref={passwordInputRef}
                     id="login-password-input"
                     type="password"
                     required
+                    autoComplete="new-password"
                     readOnly={isQuickAccount}
                     value={password}
                     onChange={(e) => {
                       if (!isQuickAccount) setPassword(e.target.value);
                     }}
-                    placeholder="••••••••"
+                    placeholder="Digite a senha"
                     className={`w-full border rounded-md px-3.5 py-2.5 text-sm focus:outline-none ${
                       isQuickAccount
                         ? 'bg-[#090D16]/60 border-slate-800 text-slate-400 cursor-not-allowed'
@@ -594,32 +673,6 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </form>
-
-              <div className="pt-6 border-t border-slate-800/80">
-                <p className="text-xs font-medium text-slate-400 mb-3">
-                  Provedores de Identidade
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {idps
-                    .filter((idp) => !currentSystem || currentSystem.allowedIdps.includes(idp.provider_type))
-                    .map((idp) => (
-                      <button
-                        key={idp.id}
-                        type="button"
-                        onClick={() => handleTriggerIdp(idp)}
-                        className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-md bg-[#090D16] border border-slate-800 hover:border-slate-600 text-xs text-slate-200 transition-colors"
-                      >
-                        <span className="flex items-center gap-2 truncate">
-                          <Globe className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span className="truncate">{idp.name}</span>
-                        </span>
-                        <span className="text-[11px] text-slate-500 shrink-0">
-                          {idp.simulation_mode ? 'Simulado' : 'Produção'}
-                        </span>
-                      </button>
-                    ))}
-                </div>
-              </div>
 
               <hr className="border-0 border-t border-slate-800/80" />
 
@@ -885,9 +938,9 @@ export const LoginGate: React.FC<LoginGateProps> = ({ onAuthenticated }) => {
       <footer className="w-full px-6 py-4 border-t border-slate-800/60 flex items-center justify-between gap-4 text-xs text-slate-500">
         <div className="flex items-center gap-3">
           <span>{platformName}</span>
-          <VersionBadge />
+          <VersionBadge version={platformVersion} />
         </div>
-        <span>© 2026, Smart Target</span>
+        <span>© {copyrightYear}, {companyName}</span>
       </footer>
     </div>
   );

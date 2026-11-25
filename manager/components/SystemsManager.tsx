@@ -10,7 +10,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Plus, Edit3, Trash2, Key, ShieldCheck, X } from 'lucide-react';
+import { Plus, Edit3, Trash2, Key, ShieldCheck, X, Link2 } from 'lucide-react';
 import { gqlRequest } from '../libraries/GraphqlClient';
 import { InfoTooltip } from './InfoTooltip';
 import type { IamSystem } from '../domains/Identity';
@@ -28,6 +28,7 @@ interface SystemsManagerProps {
   canWriteSystems?: boolean;
   identifierConfig?: IdentifierConfig;
   onNotify: (msg: string, variant?: 'success' | 'error' | 'warning') => void;
+  onOpenPlatformSettings?: () => void;
   onSystemsChanged: () => void;
 }
 
@@ -68,6 +69,7 @@ export const SystemsManager: React.FC<SystemsManagerProps> = ({
     clientIdSeparator: '_',
   },
   onNotify,
+  onOpenPlatformSettings,
   onSystemsChanged,
 }) => {
   const [systems, setSystems] = useState<IamSystem[]>([]);
@@ -339,7 +341,14 @@ export const SystemsManager: React.FC<SystemsManagerProps> = ({
               ) : (
                 systems.map((sys) => (
                   <tr key={sys.id} className="hover:bg-slate-800/35 transition-colors">
-                    <td className="py-3 px-4 font-medium text-white whitespace-nowrap">{sys.name}</td>
+                    <td className="py-3 px-4 font-medium text-white whitespace-nowrap">
+                      <div className="inline-flex items-center gap-2">
+                        <span>{sys.name}</span>
+                        {sys.id === 'identity-secure-gate' && (
+                          <span className="text-[11px] font-normal text-slate-400">· Principal</span>
+                        )}
+                      </div>
+                    </td>
                     <td className="py-3 px-4 font-mono text-slate-300 whitespace-nowrap">{sys.slug}</td>
                     <td className="py-3 px-4 font-mono text-slate-400 whitespace-nowrap" title="chave">
                       {sys.id}
@@ -413,6 +422,17 @@ export const SystemsManager: React.FC<SystemsManagerProps> = ({
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
+                          {sys.id === 'identity-secure-gate' && onOpenPlatformSettings && (
+                            <button
+                              type="button"
+                              onClick={onOpenPlatformSettings}
+                              title="Configurações da Plataforma vinculadas"
+                              aria-label="Configurações da Plataforma vinculadas"
+                              className="p-1.5 rounded hover:bg-slate-800 text-[#F6821F] hover:text-amber-300 transition-colors"
+                            >
+                              <Link2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           {sys.id !== 'identity-secure-gate' && (
                             <button
                               type="button"
@@ -457,6 +477,26 @@ export const SystemsManager: React.FC<SystemsManagerProps> = ({
             </div>
 
             <form onSubmit={handleSave} className="space-y-4">
+              {editing?.id === 'identity-secure-gate' && (
+                <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-md border border-slate-800 bg-[#090D16] text-xs text-slate-300">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Link2 className="w-3.5 h-3.5 text-[#F6821F] shrink-0" />
+                    Nome e Descrição sincronizados com Configurações → Plataforma e manifest.json.
+                  </span>
+                  {onOpenPlatformSettings && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditing(null);
+                        onOpenPlatformSettings();
+                      }}
+                      className="text-xs font-medium text-[#F6821F] hover:underline whitespace-nowrap"
+                    >
+                      Abrir Plataforma
+                    </button>
+                  )}
+                </div>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1">Nome</label>

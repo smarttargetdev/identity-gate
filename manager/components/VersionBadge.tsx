@@ -11,6 +11,7 @@
 
 import React from 'react';
 import manifest from '../../manifest.json';
+import type { PlatformVersionInfo } from '../domains/Identity';
 
 interface ManifestVersion {
   release?: number;
@@ -23,14 +24,16 @@ interface ManifestVersion {
 
 interface VersionBadgeProps {
   className?: string;
+  version?: Partial<PlatformVersionInfo> | null;
 }
 
-export const VersionBadge: React.FC<VersionBadgeProps> = ({ className = '' }) => {
-  const version = (manifest?.version ?? {}) as ManifestVersion;
+export const VersionBadge: React.FC<VersionBadgeProps> = ({ className = '', version: liveVersion }) => {
+  const manifestVersion = (manifest?.version ?? {}) as ManifestVersion;
+  const version: ManifestVersion = liveVersion ?? manifestVersion;
   const release = Number(version.release ?? 1);
   const revision = Number(version.revision ?? 0);
   const build = Number(version.build ?? 0);
-  const rawCodebase = (version.codebase ?? version.codename ?? '').trim();
+  const rawCodebase = String(version.codebase ?? version.codename ?? '').trim();
   const codebase = rawCodebase.toLowerCase();
 
   const label = codebase ? `Versão ${release}.${revision}.${build} - ${codebase}` : `Versão ${release}.${revision}.${build}`;

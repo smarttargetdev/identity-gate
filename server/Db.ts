@@ -11,8 +11,10 @@
 
 import Database from 'better-sqlite3';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
 
 export interface SystemRow {
   id: string;
@@ -41,9 +43,11 @@ export interface SystemRow {
 export interface UserRow {
   id: string;
   email: string;
+  login_identifier: string | null;
   display_name: string;
   password_hash: string;
   phone_number: string | null;
+  phones_json: string;
   phone_verified: number;
   mfa_preferred_method: 'totp' | 'sms' | 'none';
   totp_secret_enc: string | null;
@@ -140,16 +144,46 @@ export interface SystemErrorLogRow {
   created_at: string;
 }
 
-const dataDir = path.resolve(process.cwd(), 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = fs.existsSync(path.resolve(process.cwd(), 'package.json'))
+  ? process.cwd()
+  : path.resolve(moduleDir, '..');
+
+function openDatabase(): Database.Database {
+  const rawSqlitePath = process.env.SQLITE_PATH?.trim();
+
+  if (rawSqlitePath === ':memory:') {
+    return new Database(':memory:');
+  }
+
+  if (rawSqlitePath && rawSqlitePath.startsWith('file:')) {
+    return new Database(rawSqlitePath);
+  }
+
+  const preferredPath = rawSqlitePath
+    ? path.resolve(projectRoot, rawSqlitePath)
+    : path.join(projectRoot, 'data', 'identity-gate.sqlite');
+
+  try {
+    const preferredDir = path.dirname(preferredPath);
+    if (!fs.existsSync(preferredDir)) {
+      fs.mkdirSync(preferredDir, { recursive: true });
+    }
+    return new Database(preferredPath);
+  } catch (err) {
+    const fallbackDir = path.join(os.tmpdir(), 'identity-gate');
+    const fallbackPath = path.join(fallbackDir, 'identity-gate.sqlite');
+    console.warn(
+      `[Db] Unable to open SQLite at "${preferredPath}" (${err instanceof Error ? err.message : String(err)}). Falling back to "${fallbackPath}".`
+    );
+    if (!fs.existsSync(fallbackDir)) {
+      fs.mkdirSync(fallbackDir, { recursive: true });
+    }
+    return new Database(fallbackPath);
+  }
 }
 
-const dbPath = process.env.SQLITE_PATH
-  ? path.resolve(process.cwd(), process.env.SQLITE_PATH)
-  : path.join(dataDir, 'identity-gate.sqlite');
-
-export const db = new Database(dbPath);
+export const db = openDatabase();
 
 // SQLite Read-Heavy / Low-Write Edge Optimization
 db.pragma('journal_mode = WAL');
@@ -194,9 +228,11 @@ CREATE TABLE IF NOT EXISTS systems (
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
+  login_identifier TEXT,
   display_name TEXT NOT NULL,
   password_hash TEXT NOT NULL,
   phone_number TEXT,
+  phones_json TEXT NOT NULL DEFAULT '[]',
   phone_verified INTEGER NOT NULL DEFAULT 0,
   mfa_preferred_method TEXT NOT NULL DEFAULT 'none',
   totp_secret_enc TEXT,
@@ -430,6 +466,77 @@ CREATE INDEX IF NOT EXISTS idx_error_logs_created ON system_error_logs(created_a
 `;
 
 db.exec(D1_SCHEMA_SQL);
+
+function ensureUserColumnsAndBackfill(): void {
+  const cols = db.prepare('PRAGMA table_info(users)').all() as Array<{ name: string }>;
+  const colNames = new Set(cols.map((c) => c.name));
+  if (!colNames.has('login_identifier')) {
+    db.exec('ALTER TABLE users ADD COLUMN login_identifier TEXT;');
+  }
+  if (!colNames.has('phones_json')) {
+    db.exec("ALTER TABLE users ADD COLUMN phones_json TEXT NOT NULL DEFAULT '[]';");
+  }
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_login_identifier ON users(login_identifier) WHERE login_identifier IS NOT NULL AND login_identifier != '';"
+  );
+
+  const rows = db
+    .prepare('SELECT id, email, login_identifier, phone_number, phones_json FROM users')
+    .all() as Array<{
+    id: string;
+    email: string;
+    login_identifier: string | null;
+    phone_number: string | null;
+    phones_json: string | null;
+  }>;
+
+  const usedLogins = new Set(
+    rows
+      .map((r) => (r.login_identifier || '').trim().toLowerCase())
+      .filter((v) => v.length > 0)
+  );
+
+  for (const r of rows) {
+    let nextLogin = (r.login_identifier || '').trim().toLowerCase();
+    let changedLogin = false;
+    if (!nextLogin) {
+      const base = (r.email.split('@')[0] || r.id)
+        .toLowerCase()
+        .replace(/[^a-z0-9._-]/g, '');
+      let candidate = base || r.id;
+      let suffix = 1;
+      while (usedLogins.has(candidate)) {
+        candidate = `${base || r.id}_${suffix++}`;
+      }
+      usedLogins.add(candidate);
+      nextLogin = candidate;
+      changedLogin = true;
+    }
+
+    let nextPhonesJson = r.phones_json || '[]';
+    let changedPhones = false;
+    if ((!r.phones_json || r.phones_json === '[]') && r.phone_number && r.phone_number.trim()) {
+      nextPhonesJson = JSON.stringify([
+        {
+          id: `ph-${r.id}`,
+          number: r.phone_number.trim(),
+          types: ['Móvel'],
+        },
+      ]);
+      changedPhones = true;
+    }
+
+    if (changedLogin || changedPhones) {
+      db.prepare('UPDATE users SET login_identifier = ?, phones_json = ? WHERE id = ?').run(
+        nextLogin,
+        nextPhonesJson,
+        r.id
+      );
+    }
+  }
+}
+
+ensureUserColumnsAndBackfill();
 
 function hashPasswordSync(password: string): string {
   const salt = crypto.randomBytes(16).toString('hex');
@@ -722,10 +829,10 @@ export function seedInitialData(): void {
   // Users
   const insertUser = db.prepare(`
     INSERT INTO users (
-      id, email, display_name, password_hash, phone_number, phone_verified,
+      id, email, login_identifier, display_name, password_hash, phone_number, phones_json, phone_verified,
       mfa_preferred_method, totp_secret_enc, totp_enabled, backup_codes_hash,
       status, perm_version, last_login_at, anonymized_at, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const adminId = 'usr-admin-01';
@@ -735,9 +842,11 @@ export function seedInitialData(): void {
   insertUser.run(
     adminId,
     'administrator@smarttarget.com.br',
+    'administrator',
     'Osvandir Junior',
     hashPasswordSync('Vektor@2026!'),
     '+55 11 99812-4410',
+    JSON.stringify([{ id: 'ph-admin-1', number: '+55 11 99812-4410', types: ['Móvel', 'WhatsApp', 'Comercial'] }]),
     1,
     'none',
     null,
@@ -754,9 +863,11 @@ export function seedInitialData(): void {
   insertUser.run(
     claraId,
     'operator@smarttarget.com.br',
+    'operator',
     'Clara Silva',
     hashPasswordSync('Clara@2026!'),
     '+55 21 98420-1190',
+    JSON.stringify([{ id: 'ph-clara-1', number: '+55 21 98420-1190', types: ['Móvel', 'Comercial'] }]),
     1,
     'sms',
     null,
@@ -773,9 +884,11 @@ export function seedInitialData(): void {
   insertUser.run(
     rafaelId,
     'rafael.costa@vektor.iam',
+    'rafael.costa',
     'Rafael Costa',
     hashPasswordSync('Rafael@2026!'),
     null,
+    '[]',
     0,
     'none',
     null,
