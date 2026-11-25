@@ -968,8 +968,8 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
+                <div className="flex items-end gap-3">
+                  <div className="flex-1 min-w-0">
                     <label htmlFor="settings-company-name" className="block text-xs font-medium text-slate-300 mb-1.5">
                       Empresa
                     </label>
@@ -982,7 +982,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                       className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs text-white"
                     />
                   </div>
-                  <div>
+                  <div className="w-28 shrink-0">
                     <label htmlFor="settings-copyright-year" className="block text-xs font-medium text-slate-300 mb-1.5">
                       Ano
                     </label>
@@ -996,6 +996,9 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                       className="w-full bg-[#090D16] border border-slate-700 rounded-md px-3 py-2 text-xs font-mono tabular-nums text-white"
                     />
                   </div>
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  Exemplo: © {draft.companyName.trim() || 'Smart Target'}, {draft.copyrightYear.trim() || '2026'}
                 </div>
               </section>
             </>
