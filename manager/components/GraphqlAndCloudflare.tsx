@@ -11,9 +11,9 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Play, Download, Code2, Zap, RefreshCw } from 'lucide-react';
-import { gqlRequest } from '../lib/graphqlClient';
+import { gqlRequest } from '../libraries/GraphqlClient';
 import { InfoTooltip } from './InfoTooltip';
-import type { DiagnosticHeaders } from '../types/Identity';
+import type { DiagnosticHeaders } from '../domains/Identity';
 
 interface GraphqlAndCloudflareProps {
   token: string;

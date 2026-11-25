@@ -1,11 +1,11 @@
 /**
- * File: db.ts
+ * File: Db.ts
  * Kind: TypeScript
  * Container: /server
  * Summary: Camada de persistência SQLite WAL, esquema relacional IAM, fila de auditoria e seed inicial.
  * Version: 1.0.0
  * Created: 2026-11-24
- * Modified: 2026-11-24
+ * Modified: 2026-11-25
  * Developer: Osvandir Júnior
  */
 

@@ -11,9 +11,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { UserPlus, Edit3, Trash2, Link2, X, Save } from 'lucide-react';
-import { gqlRequest } from '../lib/graphqlClient';
+import { gqlRequest } from '../libraries/GraphqlClient';
 import { InfoTooltip } from './InfoTooltip';
-import type { IamSystem, IamUser } from '../types/Identity';
+import type { IamSystem, IamUser } from '../domains/Identity';
 
 interface UsersManagerProps {
   token: string;

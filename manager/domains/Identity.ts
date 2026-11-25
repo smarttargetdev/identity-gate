@@ -1,11 +1,11 @@
 /**
  * File: Identity.ts
  * Kind: TypeScript
- * Container: /manager/types
+ * Container: /manager/domains
  * Summary: Definições de tipos TypeScript para entidades IAM, sessões, RBAC, auditoria, borda e configurações.
  * Version: 1.0.0
  * Created: 2026-11-24
- * Modified: 2026-11-24
+ * Modified: 2026-11-25
  * Developer: Osvandir Júnior
  */
 

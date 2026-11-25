@@ -10,8 +10,8 @@
  */
 
 import React, { useId } from 'react';
-import type { SystemHealthLevel } from '../hooks/useSystemHealth';
-import type { LatencyTrendPoint } from '../types/Identity';
+import type { SystemHealthLevel } from '../hooks/UseSystemHealth';
+import type { LatencyTrendPoint } from '../domains/Identity';
 
 interface LatencySparklineProps {
   points: LatencyTrendPoint[];

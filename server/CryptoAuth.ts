@@ -1,11 +1,11 @@
 /**
- * File: cryptoAuth.ts
+ * File: CryptoAuth.ts
  * Kind: TypeScript
  * Container: /server
  * Summary: Criptografia de senhas/segredos, chaves RSA JWKS, emissão/validação de JWT e TOTP 2FA.
  * Version: 1.0.0
  * Created: 2026-11-24
- * Modified: 2026-11-24
+ * Modified: 2026-11-25
  * Developer: Osvandir Júnior
  */
 
@@ -23,8 +23,8 @@ import {
 } from 'jose';
 import * as OTPAuth from 'otpauth';
 import QRCode from 'qrcode';
-import { db, type SystemRow, type UserRow } from './db.ts';
-import { getPlatformSettings } from './settings.ts';
+import { db, type SystemRow, type UserRow } from './Db.ts';
+import { getPlatformSettings } from './Settings.ts';
 
 const MASTER_SECRET = process.env.IAM_MASTER_SECRET || 'smarties-gate-edge-master-secret-2026-dev-32b';
 const DEFAULT_JWT_ISSUER = process.env.IAM_JWT_ISSUER || 'https://isg.edge.local';

@@ -1,11 +1,11 @@
 /**
- * File: healthAlertAudio.ts
+ * File: HealthAlertAudio.ts
  * Kind: TypeScript
- * Container: /manager/lib
+ * Container: /manager/libraries
  * Summary: Síntese de alertas sonoros via Web Audio API para transições de degradação ou falha crítica.
  * Version: 1.0.0
  * Created: 2026-11-24
- * Modified: 2026-11-24
+ * Modified: 2026-11-25
  * Developer: Osvandir Júnior
  */
 

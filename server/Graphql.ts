@@ -1,11 +1,11 @@
 /**
- * File: graphql.ts
+ * File: Graphql.ts
  * Kind: TypeScript
  * Container: /server
  * Summary: Schema e resolvers GraphQL administrativos com DataLoader, RBAC, auditoria, conformidade e métricas.
  * Version: 1.0.0
  * Created: 2026-11-24
- * Modified: 2026-11-24
+ * Modified: 2026-11-25
  * Developer: Osvandir Júnior
  */
 
@@ -25,7 +25,7 @@ import {
   type SystemRow,
   type SystemErrorLogRow,
   type UserRow,
-} from './db.ts';
+} from './Db.ts';
 import {
   decryptSecret,
   encryptSecret,
@@ -41,7 +41,7 @@ import {
   verifyPassword,
   verifyTotpToken,
   type VerifiedJwtContext,
-} from './cryptoAuth.ts';
+} from './CryptoAuth.ts';
 import {
   buildEdgeCacheKey,
   bumpSystemPolicyVersion,
@@ -55,7 +55,7 @@ import {
   purgeSystemEdgeCache,
   recordEdgeCacheOutcome,
   setEdgeCached,
-} from './edgeCache.ts';
+} from './EdgeCache.ts';
 import {
   clearSystemErrors,
   evaluateSystemHealthTransition,
@@ -64,14 +64,14 @@ import {
   recordStructuredAudit,
   recordSystemException,
   type SystemHealthEventRow,
-} from './telemetry.ts';
+} from './Telemetry.ts';
 import {
   buildIdentifierValue,
   getPlatformSettings,
   resetPlatformSettings,
   updatePlatformSettings,
   type PlatformSettings,
-} from './settings.ts';
+} from './Settings.ts';
 
 const schema = buildSchema(`
   type CustomClaim {

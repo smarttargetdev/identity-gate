@@ -26,7 +26,7 @@ import {
   Smartphone,
   X,
 } from 'lucide-react';
-import type { ExecutionEnvironment, PublicPlatformConfig } from '../types/Identity';
+import type { ExecutionEnvironment, PublicPlatformConfig } from '../domains/Identity';
 import { BrandHeaderLogo } from './BrandHeaderLogo';
 import { VersionBadge } from './VersionBadge';
 

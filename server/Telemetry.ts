@@ -1,11 +1,11 @@
 /**
- * File: telemetry.ts
+ * File: Telemetry.ts
  * Kind: TypeScript
  * Container: /server
  * Summary: Telemetria estruturada em tempo real via SSE, histórico de saúde do sistema e registro de exceções.
  * Version: 1.0.0
  * Created: 2026-11-24
- * Modified: 2026-11-24
+ * Modified: 2026-11-25
  * Developer: Osvandir Júnior
  */
 
@@ -17,9 +17,9 @@ import {
   queueAuditLog,
   type AuditLogRow,
   type SystemErrorLogRow,
-} from './db.ts';
-import { hashSubjectForAudit, maskEmail, maskIp } from './cryptoAuth.ts';
-import { getPlatformSettings } from './settings.ts';
+} from './Db.ts';
+import { hashSubjectForAudit, maskEmail, maskIp } from './CryptoAuth.ts';
+import { getPlatformSettings } from './Settings.ts';
 
 export type HealthTransitionStatus = 'healthy' | 'degraded' | 'critical';
 

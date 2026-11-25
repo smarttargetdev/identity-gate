@@ -31,11 +31,11 @@ import {
   VolumeX,
   X,
 } from 'lucide-react';
-import { gqlRequest } from '../lib/graphqlClient';
-import { playHealthAlertSound } from '../lib/healthAlertAudio';
+import { gqlRequest } from '../libraries/GraphqlClient';
+import { playHealthAlertSound } from '../libraries/HealthAlertAudio';
 import { DetailedErrorLog } from './DetailedErrorLog';
 import { InfoTooltip } from './InfoTooltip';
-import type { ExecutionEnvironment, PlatformSystemSettings } from '../types/Identity';
+import type { ExecutionEnvironment, PlatformSystemSettings } from '../domains/Identity';
 
 interface SystemSettingsProps {
   token: string;

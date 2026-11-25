@@ -45,7 +45,7 @@ import {
   AlertTriangle,
   CheckCircle2,
 } from 'lucide-react';
-import { gqlRequest } from '../lib/graphqlClient';
+import { gqlRequest } from '../libraries/GraphqlClient';
 import { AuditLogs } from './AuditLogs';
 import { HealthHistoryPanel } from './HealthHistoryPanel';
 import { InfoTooltip } from './InfoTooltip';
@@ -57,7 +57,7 @@ import type {
   IamSystem,
   IamUser,
   SystemHealthEvent,
-} from '../types/Identity';
+} from '../domains/Identity';
 
 export type OverviewSection =
   | 'overview'

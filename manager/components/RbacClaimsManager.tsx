@@ -11,9 +11,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { Plus, Trash2, Save, Shield, Edit3, X, KeyRound } from 'lucide-react';
-import { gqlRequest } from '../lib/graphqlClient';
+import { gqlRequest } from '../libraries/GraphqlClient';
 import { InfoTooltip } from './InfoTooltip';
-import type { IamSystem, Permission, Role } from '../types/Identity';
+import type { IamSystem, Permission, Role } from '../domains/Identity';
 
 interface RbacClaimsManagerProps {
   token: string;

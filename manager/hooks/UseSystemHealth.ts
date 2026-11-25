@@ -1,17 +1,17 @@
 /**
- * File: useSystemHealth.ts
+ * File: UseSystemHealth.ts
  * Kind: TypeScript
  * Container: /manager/hooks
  * Summary: Hook React que monitora a latência recente e eventos SSE para classificar a saúde do sistema.
  * Version: 1.0.0
  * Created: 2026-11-24
- * Modified: 2026-11-24
+ * Modified: 2026-11-25
  * Developer: Osvandir Júnior
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { gqlRequest } from '../lib/graphqlClient';
-import type { LatencyTrendPoint } from '../types/Identity';
+import { gqlRequest } from '../libraries/GraphqlClient';
+import type { LatencyTrendPoint } from '../domains/Identity';
 
 export type SystemHealthLevel = 'healthy' | 'degraded' | 'critical' | 'loading';
 

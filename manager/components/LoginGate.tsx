@@ -11,7 +11,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Shield, KeyRound, Smartphone, Lock, ArrowRight, Globe, AlertCircle, CheckCircle2, ChevronDown, X, Check } from 'lucide-react';
-import type { AuthSessionState, ExecutionEnvironment, PublicPlatformConfig } from '../types/Identity';
+import type { AuthSessionState, ExecutionEnvironment, PublicPlatformConfig } from '../domains/Identity';
 import { BrandHeaderLogo } from './BrandHeaderLogo';
 import { VersionBadge } from './VersionBadge';
 

@@ -11,9 +11,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { Plus, Edit3, Trash2, Key, ShieldCheck, X } from 'lucide-react';
-import { gqlRequest } from '../lib/graphqlClient';
+import { gqlRequest } from '../libraries/GraphqlClient';
 import { InfoTooltip } from './InfoTooltip';
-import type { IamSystem } from '../types/Identity';
+import type { IamSystem } from '../domains/Identity';
 
 interface IdentifierConfig {
   systemIdPrefix: string;

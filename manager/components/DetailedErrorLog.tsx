@@ -22,9 +22,9 @@ import {
   Trash2,
   Zap,
 } from 'lucide-react';
-import { gqlRequest } from '../lib/graphqlClient';
+import { gqlRequest } from '../libraries/GraphqlClient';
 import { InfoTooltip } from './InfoTooltip';
-import type { SystemErrorLog } from '../types/Identity';
+import type { SystemErrorLog } from '../domains/Identity';
 
 interface DetailedErrorLogProps {
   token: string;

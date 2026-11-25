@@ -1,11 +1,11 @@
 /**
- * File: firebase.ts
+ * File: Firebase.ts
  * Kind: TypeScript
- * Container: /manager/lib
+ * Container: /manager/libraries
  * Summary: Inicialização do SDK Firebase (Auth e Firestore), validação de conexão no boot, sanitização conforme blueprint e tratamento estruturado de erros.
  * Version: 1.0.0
  * Created: 2026-11-24
- * Modified: 2026-11-24
+ * Modified: 2026-11-25
  * Developer: Osvandir Júnior
  */
 

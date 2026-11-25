@@ -11,9 +11,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { Globe, Play, CheckCircle2, KeyRound, Save, X, SlidersHorizontal } from 'lucide-react';
-import { gqlRequest } from '../lib/graphqlClient';
+import { gqlRequest } from '../libraries/GraphqlClient';
 import { InfoTooltip } from './InfoTooltip';
-import type { IamSystem, IdentityProvider } from '../types/Identity';
+import type { IamSystem, IdentityProvider } from '../domains/Identity';
 
 interface IdpAndOAuthSandboxProps {
   token: string;

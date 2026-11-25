@@ -21,7 +21,7 @@ import {
   type IdentityProviderRow,
   type SystemRow,
   type UserRow,
-} from './server/db.ts';
+} from './server/Db.ts';
 import {
   decryptSecret,
   ensureRsaKeys,
@@ -33,7 +33,7 @@ import {
   verifyIncomingJwt,
   verifyPassword,
   verifyTotpToken,
-} from './server/cryptoAuth.ts';
+} from './server/CryptoAuth.ts';
 import {
   buildEdgeCacheKey,
   computeEffectiveCacheTtl,
@@ -42,19 +42,19 @@ import {
   getKvUserPermVersion,
   recordEdgeCacheOutcome,
   setEdgeCached,
-} from './server/edgeCache.ts';
-import { graphqlHandler } from './server/graphql.ts';
+} from './server/EdgeCache.ts';
+import { graphqlHandler } from './server/Graphql.ts';
 import {
   recordStructuredAudit,
   recordSystemException,
   sseTelemetryHandler,
-} from './server/telemetry.ts';
+} from './server/Telemetry.ts';
 import {
   createCloudflareBundleZip,
   getCloudflareBundleFiles,
   getInfraBundleFilename,
-} from './server/cloudflareExport.ts';
-import { getPlatformSettings, getPublicPlatformConfig } from './server/settings.ts';
+} from './server/CloudflareExport.ts';
+import { getPlatformSettings, getPublicPlatformConfig } from './server/Settings.ts';
 
 const PORT = Number(process.env.PORT || 3000);
 const failedLoginTracker = new Map<string, { count: number; resetAt: number }>();

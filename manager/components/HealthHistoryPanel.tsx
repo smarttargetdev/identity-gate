@@ -19,7 +19,7 @@ import {
   History,
 } from 'lucide-react';
 import { InfoTooltip } from './InfoTooltip';
-import type { SystemHealthEvent } from '../types/Identity';
+import type { SystemHealthEvent } from '../domains/Identity';
 
 interface HealthHistoryPanelProps {
   events: SystemHealthEvent[];

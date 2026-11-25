@@ -37,7 +37,7 @@ import {
   testConnection,
   type ConsoleTheme,
   type SanitizedConsolePreferenceInput,
-} from '../lib/firebase';
+} from '../libraries/Firebase';
 
 export interface CloudConsolePreference {
   ownerId: string;

@@ -24,9 +24,9 @@ import {
   Check,
   ShieldCheck,
 } from 'lucide-react';
-import { gqlRequest } from '../lib/graphqlClient';
+import { gqlRequest } from '../libraries/GraphqlClient';
 import { InfoTooltip } from './InfoTooltip';
-import type { AuditLog, DiagnosticHeaders, IamSystem } from '../types/Identity';
+import type { AuditLog, DiagnosticHeaders, IamSystem } from '../domains/Identity';
 
 export interface AuditLogsProps {
   token: string;

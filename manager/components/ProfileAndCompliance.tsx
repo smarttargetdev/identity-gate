@@ -24,11 +24,11 @@ import {
   SlidersHorizontal,
   Cloud,
 } from 'lucide-react';
-import { gqlRequest } from '../lib/graphqlClient';
+import { gqlRequest } from '../libraries/GraphqlClient';
 import { InfoTooltip } from './InfoTooltip';
 import { useFirebase } from './FirebaseProvider';
-import type { ConsoleTheme } from '../lib/firebase';
-import type { ComplianceSummary, IamSystem, IamUser } from '../types/Identity';
+import type { ConsoleTheme } from '../libraries/Firebase';
+import type { ComplianceSummary, IamSystem, IamUser } from '../domains/Identity';
 
 interface ProfileAndComplianceProps {
   token: string;
